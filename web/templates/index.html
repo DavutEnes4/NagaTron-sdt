@@ -4,89 +4,99 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RFID & I2C Motor Kontrol Dashboard</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js">
-      // MQTT durumunu güncelle
-      function updateMQTTStatus() {
-        fetch('/api/mqtt-status')
-          .then(res => res.json())
-          .then(data => {
-            const ind = document.getElementById('mqttStatusIndicator');
-            const txt = document.getElementById('mqttStatusText');
-            if (data.connected) {
-              ind.className = 'status-indicator status-connected';
-              txt.textContent = 'Bağlı';
-            } else {
-              ind.className = 'status-indicator status-disconnected';
-              txt.textContent = 'Bağlı Değil';
-            }
-          })
-          .catch(() => {
-            const ind = document.getElementById('mqttStatusIndicator');
-            const txt = document.getElementById('mqttStatusText');
-            ind.className = 'status-indicator status-disconnected';
-            txt.textContent = 'Hata';
-          });
-      }
-      window.addEventListener('load', updateMQTTStatus);
-      setInterval(updateMQTTStatus, 5000);
-
-    </script>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Socket.IO -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    
     <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-color: #1f2937;
+            --light-color: #f8fafc;
+            --border-radius: 12px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
             min-height: 100vh;
             color: #333;
+            font-size: 14px; /* 7 inç için optimize */
         }
-        
-        .container {
-            max-width: 1400px;
+
+        /* Navbar Styles */
+        .navbar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+        }
+
+        .navbar-brand {
+            font-weight: bold;
+            color: var(--primary-color) !important;
+            font-size: 1.2rem;
+        }
+
+        .nav-link {
+            color: #666 !important;
+            font-weight: 500;
+            padding: 0.5rem 1rem !important;
+            border-radius: var(--border-radius);
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: var(--primary-color) !important;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        /* Main Container */
+        .main-container {
+            padding: 1rem;
+            max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
         }
-        
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 30px;
-        }
-        
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-        
-        .dashboard {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
+
+        /* Card Styles */
         .card {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            border-radius: var(--border-radius);
             border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: var(--shadow);
+            margin-bottom: 1rem;
+            overflow: hidden;
         }
-        
-        .card h2 {
-            color: #4a5568;
-            margin-bottom: 20px;
-            font-size: 1.5rem;
-            border-bottom: 3px solid #667eea;
-            padding-bottom: 10px;
+
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 1rem;
+            border: none;
+            font-weight: 600;
         }
-        
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        /* Status Indicators */
         .status-indicator {
             display: inline-block;
             width: 12px;
@@ -94,656 +104,771 @@
             border-radius: 50%;
             margin-right: 8px;
         }
-        
-        .status-connected { background-color: #10b981; }
-        .status-disconnected { background-color: #ef4444; }
-        .status-active { background-color: #f59e0b; }
-        
-        .input-group {
-            margin-bottom: 15px;
+
+        .status-connected { background-color: var(--success-color); }
+        .status-disconnected { background-color: var(--danger-color); }
+        .status-active { background-color: var(--warning-color); }
+
+        /* Grid System for 7 inch */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
         }
-        
-        .input-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-            color: #4a5568;
+
+        /* RFID Section */
+        .rfid-section {
+            grid-column: span 2;
         }
-        
-        .input-group input, .input-group select {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-        
-        .input-group input:focus, .input-group select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+        .rfid-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
+        }
+
+        /* I2C Section */
+        .i2c-section {
+            grid-column: span 2;
+        }
+
+        .i2c-card {
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            color: white;
+        }
+
+        /* Motor Control Section */
+        .motor-section {
+            grid-column: span 2;
+        }
+
+        .motor-card {
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+            color: white;
+        }
+
+        /* QTR Section */
+        .qtr-section {
+            grid-column: span 1;
+        }
+
+        .qtr-card {
+            background: linear-gradient(135deg, #43e97b, #38f9d7);
+            color: white;
+        }
+
+        /* Buttons */
+        .btn-custom {
+            border-radius: var(--border-radius);
+            font-weight: 500;
+            padding: 0.5rem 1rem;
             border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            margin: 5px;
+            transition: all 0.3s ease;
+            margin: 0.25rem;
         }
-        
-        .btn:hover {
+
+        .btn-primary-custom {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-success-custom {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .btn-warning-custom {
+            background: var(--warning-color);
+            color: white;
+        }
+
+        .btn-danger-custom {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .btn-custom:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
-        
-        .btn-danger {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+
+        /* Form Controls */
+        .form-control {
+            border-radius: var(--border-radius);
+            border: 1px solid #ddd;
+            padding: 0.5rem;
+            font-size: 14px;
         }
-        
-        .btn-success {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
         }
-        
-        .btn-warning {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+
+        /* Data Display */
+        .data-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.75rem;
+            border-radius: var(--border-radius);
+            margin: 0.5rem 0;
+            border-left: 4px solid var(--primary-color);
         }
-        
-        .data-display {
-            background: #f8fafc;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 10px 0;
-            border-left: 4px solid #667eea;
-        }
-        
-        .data-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-        }
-        
+
         .data-label {
             font-weight: 600;
-            color: #4a5568;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
         }
-        
+
         .data-value {
-            color: #2d3748;
-            font-family: monospace;
-        }
-        
-        .history-item {
-            background: #f1f5f9;
-            border-radius: 6px;
-            padding: 10px;
-            margin-bottom: 8px;
-            border-left: 3px solid #667eea;
-        }
-        
-        .history-time {
-            font-size: 12px;
-            color: #64748b;
-        }
-        
-        .control-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin: 15px 0;
-        }
-        
-        /* Hata mesajlarını gizle */
-        .error-hidden {
-            display: none !important;
-        }
-        
-        /* Konsol hatalarını gizle */
-        body::after {
-            content: none !important;
-        }
-        
-        .sensor-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-            margin: 15px 0;
-        }
-        
-        .sensor-value {
-            background: #e2e8f0;
-            padding: 8px;
-            text-align: center;
-            border-radius: 6px;
-            font-family: monospace;
-            font-weight: 600;
-        }
-        
-        .sensor-active {
-            background: #10b981;
+            font-size: 1.1rem;
+            font-weight: bold;
             color: white;
         }
-        
-        .motor-speeds {
+
+        /* Sensor Display */
+        .sensor-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin: 15px 0;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 0.25rem;
+            margin: 1rem 0;
         }
-        
-        .speed-indicator {
-            background: #f8fafc;
-            border-radius: 8px;
-            padding: 15px;
+
+        .sensor-item {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            padding: 0.5rem;
             text-align: center;
-            border: 2px solid #e2e8f0;
-        }
-        
-        .speed-value {
-            font-size: 24px;
             font-weight: bold;
-            color: #4a5568;
-            margin-top: 5px;
+            color: white;
+            transition: all 0.3s ease;
         }
-        
-        .alert {
-            padding: 12px;
-            border-radius: 8px;
-            margin: 10px 0;
+
+        .sensor-active {
+            background: var(--success-color);
+            transform: scale(1.1);
         }
-        
-        .alert-success {
-            background: #d1fae5;
-            border: 1px solid #10b981;
-            color: #065f46;
-        }
-        
-        .alert-error {
-            background: #fee2e2;
-            border: 1px solid #ef4444;
-            color: #991b1b;
-        }
-        
-        .direction-display {
-            text-align: center;
-            padding: 15px;
-            background: #f8fafc;
-            border-radius: 8px;
-            margin: 10px 0;
-        }
-        
-        .direction-text {
-            font-size: 18px;
-            font-weight: bold;
-            color: #4a5568;
-            text-transform: uppercase;
-        }
-        
+
+        /* Responsive Design */
         @media (max-width: 768px) {
-            .dashboard {
+            .dashboard-grid {
                 grid-template-columns: 1fr;
             }
             
-            .control-grid {
-                grid-template-columns: repeat(2, 1fr);
+            .rfid-section, .i2c-section, .motor-section {
+                grid-column: span 1;
             }
             
-            .sensor-grid {
-                grid-template-columns: repeat(2, 1fr);
+            .card-body {
+                padding: 1rem;
             }
+            
+            .btn-custom {
+                padding: 0.4rem 0.8rem;
+                font-size: 13px;
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+        }
+
+        .toast {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        /* History Tables */
+        .history-table {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+        }
+
+        .history-table th {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-weight: 600;
+            padding: 0.75rem;
+        }
+
+        .history-table td {
+            color: white;
+            padding: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Motor Control Panel */
+        .motor-control-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0.5rem;
+            margin: 1rem 0;
+        }
+
+        .motor-btn {
+            padding: 0.75rem;
+            border-radius: var(--border-radius);
+            border: none;
+            font-weight: 600;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .motor-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-forward { background: var(--success-color); }
+        .btn-backward { background: var(--warning-color); }
+        .btn-left { background: var(--primary-color); }
+        .btn-right { background: var(--secondary-color); }
+        .btn-stop { background: var(--danger-color); }
+        .btn-emergency { background: #dc2626; }
+
+        /* PID Control Panel */
+        .pid-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .pid-input {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: var(--border-radius);
+            color: white;
+            padding: 0.5rem;
+        }
+
+        .pid-input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* System Status */
+        .system-status {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: var(--border-radius);
+            margin-bottom: 1rem;
+        }
+
+        .status-item {
+            text-align: center;
+            color: white;
+        }
+
+        .status-item i {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .status-item.active i {
+            color: var(--success-color);
+        }
+
+        .status-item.inactive i {
+            color: var(--danger-color);
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>RFID & I2C Motor Kontrol Dashboard</h1>
-            <p>Deneyap Kart Kontrol ve İzleme Sistemi</p>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-microchip me-2"></i>
+                RFID-I2C Dashboard
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#rfid-section">
+                            <i class="fas fa-credit-card me-1"></i>RFID
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#i2c-section">
+                            <i class="fas fa-cogs me-1"></i>I2C
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#motor-section">
+                            <i class="fas fa-car me-1"></i>Motor
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#qtr-section">
+                            <i class="fas fa-eye me-1"></i>QTR
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <span class="nav-link" id="mqttStatus">
+                            <span class="status-indicator status-disconnected" id="mqttStatusIndicator"></span>
+                            <span id="mqttStatusText">Bağlı Değil</span>
+                        </span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- System Status -->
+        <div class="system-status">
+            <div class="status-item" id="systemStatus">
+                <i class="fas fa-server"></i>
+                <div>Sistem</div>
+            </div>
+            <div class="status-item" id="mqttStatusItem">
+                <i class="fas fa-wifi"></i>
+                <div>MQTT</div>
+            </div>
+            <div class="status-item" id="rfidStatusItem">
+                <i class="fas fa-credit-card"></i>
+                <div>RFID</div>
+            </div>
+            <div class="status-item" id="i2cStatusItem">
+                <i class="fas fa-microchip"></i>
+                <div>I2C</div>
+            </div>
         </div>
 
-        <div class="dashboard">
-    <!-- MQTT Durum Kartı -->
-    <div class="card">
-      <h2>🔌 MQTT Durum</h2>
-      <div class="data-display">
-        <div class="data-row">
-          <span class="data-label">Broker Bağlı mı?</span>
-          <span class="data-value">
-            <span id="mqttStatusIndicator" class="status-indicator status-disconnected"></span>
-            <span id="mqttStatusText">Bağlanıyor…</span>
-          </span>
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+            <!-- RFID Section -->
+            <div class="rfid-section" id="rfid-section">
+                <div class="card rfid-card">
+                    <div class="card-header">
+                        <i class="fas fa-credit-card me-2"></i>
+                        RFID Sistemi
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="data-item">
+                                    <div class="data-label">Son Kart ID</div>
+                                    <div class="data-value" id="lastCardId">Henüz kart okunmadı</div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">Toplam Okuma</div>
+                                    <div class="data-value" id="totalReads">0</div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">Toplam Yazma</div>
+                                    <div class="data-value" id="totalWrites">0</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label text-white">Kart ID</label>
+                                    <input type="text" class="form-control" id="cardIdInput" placeholder="Kart ID (opsiyonel)">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-white">Yazılacak Veri</label>
+                                    <textarea class="form-control" id="writeDataInput" rows="3" placeholder="Yazılacak veriyi girin"></textarea>
+                                </div>
+                                <button class="btn btn-custom btn-success-custom" onclick="writeRFID()">
+                                    <i class="fas fa-pen me-1"></i>Karta Yaz
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- RFID History -->
+                        <div class="mt-3">
+                            <h6 class="text-white mb-2">Son İşlemler</h6>
+                            <div class="history-table">
+                                <table class="table table-borderless mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Zaman</th>
+                                            <th>Kart ID</th>
+                                            <th>İşlem</th>
+                                            <th>Durum</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rfidHistory">
+                                        <tr>
+                                            <td colspan="4" class="text-center text-white-50">Henüz işlem yok</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- I2C Section -->
+            <div class="i2c-section" id="i2c-section">
+                <div class="card i2c-card">
+                    <div class="card-header">
+                        <i class="fas fa-cogs me-2"></i>
+                        I2C Kontrol Sistemi
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="data-item">
+                                    <div class="data-label">I2C Bağlantısı</div>
+                                    <div class="data-value" id="i2cConnection">Bağlı Değil</div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">Motor Durumu</div>
+                                    <div class="data-value" id="motorStatus">Durdu</div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">QTR Sensör</div>
+                                    <div class="data-value" id="qtrStatus">Pasif</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-white mb-2">PID Ayarları</h6>
+                                <div class="pid-panel">
+                                    <div>
+                                        <label class="form-label text-white">Kp</label>
+                                        <input type="number" class="form-control pid-input" id="kpInput" value="2.0" step="0.1">
+                                    </div>
+                                    <div>
+                                        <label class="form-label text-white">Ki</label>
+                                        <input type="number" class="form-control pid-input" id="kiInput" value="0.1" step="0.1">
+                                    </div>
+                                    <div>
+                                        <label class="form-label text-white">Kd</label>
+                                        <input type="number" class="form-control pid-input" id="kdInput" value="0.5" step="0.1">
+                                    </div>
+                                    <div>
+                                        <label class="form-label text-white">Setpoint</label>
+                                        <input type="number" class="form-control pid-input" id="setpointInput" value="0">
+                                    </div>
+                                </div>
+                                <button class="btn btn-custom btn-primary-custom" onclick="updatePID()">
+                                    <i class="fas fa-save me-1"></i>PID Güncelle
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Motor Control Section -->
+            <div class="motor-section" id="motor-section">
+                <div class="card motor-card">
+                    <div class="card-header">
+                        <i class="fas fa-car me-2"></i>
+                        Motor Kontrolü
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="data-item">
+                                    <div class="data-label">Sol Motor Hızı</div>
+                                    <div class="data-value" id="leftSpeed">0</div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">Sağ Motor Hızı</div>
+                                    <div class="data-value" id="rightSpeed">0</div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">Yön</div>
+                                    <div class="data-value" id="motorDirection">Durdu</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-white mb-2">Motor Kontrolleri</h6>
+                                <div class="motor-control-panel">
+                                    <button class="motor-btn btn-forward" onclick="motorControl('forward')">
+                                        <i class="fas fa-arrow-up"></i><br>İleri
+                                    </button>
+                                    <button class="motor-btn btn-backward" onclick="motorControl('backward')">
+                                        <i class="fas fa-arrow-down"></i><br>Geri
+                                    </button>
+                                    <button class="motor-btn btn-left" onclick="motorControl('left')">
+                                        <i class="fas fa-arrow-left"></i><br>Sol
+                                    </button>
+                                    <button class="motor-btn btn-right" onclick="motorControl('right')">
+                                        <i class="fas fa-arrow-right"></i><br>Sağ
+                                    </button>
+                                    <button class="motor-btn btn-stop" onclick="motorControl('stop')">
+                                        <i class="fas fa-stop"></i><br>Dur
+                                    </button>
+                                    <button class="motor-btn btn-emergency" onclick="motorControl('emergency_stop')">
+                                        <i class="fas fa-exclamation-triangle"></i><br>Acil
+                                    </button>
+                                </div>
+                                
+                                <div class="mt-3">
+                                    <label class="form-label text-white">Hız</label>
+                                    <input type="range" class="form-range" id="speedSlider" min="0" max="255" value="150">
+                                    <div class="text-white text-center" id="speedValue">150</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QTR Section -->
+            <div class="qtr-section" id="qtr-section">
+                <div class="card qtr-card">
+                    <div class="card-header">
+                        <i class="fas fa-eye me-2"></i>
+                        QTR Sensör
+                    </div>
+                    <div class="card-body">
+                        <div class="data-item">
+                            <div class="data-label">Pozisyon</div>
+                            <div class="data-value" id="qtrPosition">0</div>
+                        </div>
+                        <div class="data-item">
+                            <div class="data-label">Çizgi Algılandı</div>
+                            <div class="data-value" id="lineDetected">Hayır</div>
+                        </div>
+                        
+                        <h6 class="text-white mb-2 mt-3">Sensör Durumları</h6>
+                        <div class="sensor-grid" id="sensorGrid">
+                            <!-- Sensörler JavaScript ile doldurulacak -->
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
     </div>
 
-            <!-- RFID Kartı -->
-            <div class="card">
-                <h2>📱 RFID Okuyucu</h2>
-                
-                <div class="data-display">
-                    <div class="data-row">
-                        <span class="data-label">Son Okunan Kart:</span>
-                        <span class="data-value" id="lastCardId">Henüz kart okunmadı</span>
-                    </div>
-                    <div class="data-row">
-                        <span class="data-label">Okuma Zamanı:</span>
-                        <span class="data-value" id="lastReadTime">-</span>
-                    </div>
-                    <div class="data-row">
-                        <span class="data-label">Toplam Okuma:</span>
-                        <span class="data-value" id="totalReads">0</span>
-                    </div>
-                    <div class="data-row">
-                        <span class="data-label">Toplam Yazma:</span>
-                        <span class="data-value" id="totalWrites">0</span>
-                    </div>
-                </div>
+    <!-- Toast Container -->
+    <div class="toast-container"></div>
 
-                <div class="input-group">
-                    <label>Kart ID:</label>
-                    <input type="text" id="writeCardId" placeholder="Kart ID (opsiyonel)">
-                </div>
-                
-                <div class="input-group">
-                    <label>Yazılacak Veri:</label>
-                    <input type="text" id="writeData" placeholder="Yazılacak veriyi girin">
-                </div>
-                
-                <button class="btn" onclick="writeRFID()">📝 RFID'ye Yaz</button>
-                
-                <div id="rfidAlerts"></div>
-            </div>
-
-            <!-- I2C Durum Kartı -->
-            <div class="card">
-                <h2>🔗 I2C Sistem Durumu</h2>
-                
-                <div class="data-display">
-                    <div class="data-row">
-                        <span class="data-label">I2C Bağlantısı:</span>
-                        <span class="data-value">
-                            <span id="i2cStatus" class="status-indicator status-disconnected"></span>
-                            <span id="i2cStatusText">Bağlı Değil</span>
-                        </span>
-                    </div>
-                    <div class="data-row">
-                        <span class="data-label">Motor Aktif:</span>
-                        <span class="data-value">
-                            <span id="motorStatus" class="status-indicator status-disconnected"></span>
-                            <span id="motorStatusText">Pasif</span>
-                        </span>
-                    </div>
-                    <div class="data-row">
-                        <span class="data-label">QTR Aktif:</span>
-                        <span class="data-value">
-                            <span id="qtrStatus" class="status-indicator status-disconnected"></span>
-                            <span id="qtrStatusText">Pasif</span>
-                        </span>
-                    </div>
-                    <div class="data-row">
-                        <span class="data-label">Son Ping:</span>
-                        <span class="data-value" id="lastPing">-</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- PID Ayarları -->
-            <div class="card">
-                <h2>⚙️ PID Kontrol Ayarları</h2>
-                
-                <div class="input-group">
-                    <label>Kp (Proportional):</label>
-                    <input type="number" id="pidKp" step="0.1" value="2.0">
-                </div>
-                
-                <div class="input-group">
-                    <label>Ki (Integral):</label>
-                    <input type="number" id="pidKi" step="0.01" value="0.1">
-                </div>
-                
-                <div class="input-group">
-                    <label>Kd (Derivative):</label>
-                    <input type="number" id="pidKd" step="0.1" value="0.5">
-                </div>
-                
-                <div class="input-group">
-                    <label>Setpoint:</label>
-                    <input type="number" id="pidSetpoint" step="1" value="0">
-                </div>
-                
-                <button class="btn" onclick="updatePID()">🔧 PID Güncelle</button>
-                
-                <div id="pidAlerts"></div>
-            </div>
-
-            <!-- Pin Ayarları -->
-            <div class="card">
-                <h2>📌 Pin Konfigürasyonu</h2>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div>
-                        <div class="input-group">
-                            <label>Sol Motor Pin 1:</label>
-                            <input type="number" id="motorLeftPin1" value="5">
-                        </div>
-                        <div class="input-group">
-                            <label>Sol Motor Pin 2:</label>
-                            <input type="number" id="motorLeftPin2" value="6">
-                        </div>
-                        <div class="input-group">
-                            <label>Sol Enable Pin:</label>
-                            <input type="number" id="enableLeft" value="3">
-                        </div>
-                    </div>
-                    <div>
-                        <div class="input-group">
-                            <label>Sağ Motor Pin 1:</label>
-                            <input type="number" id="motorRightPin1" value="9">
-                        </div>
-                        <div class="input-group">
-                            <label>Sağ Motor Pin 2:</label>
-                            <input type="number" id="motorRightPin2" value="10">
-                        </div>
-                        <div class="input-group">
-                            <label>Sağ Enable Pin:</label>
-                            <input type="number" id="enableRight" value="11">
-                        </div>
-                    </div>
-                </div>
-                
-                <button class="btn" onclick="updatePins()">📌 Pin Ayarlarını Güncelle</button>
-                
-                <div id="pinAlerts"></div>
-            </div>
-
-            <!-- Hız Kontrolü -->
-            <div class="card">
-                <h2>🏁 Hız Kontrol Ayarları</h2>
-                
-                <div class="input-group">
-                    <label>Temel Hız:</label>
-                    <input type="number" id="baseSpeed" min="0" max="255" value="150">
-                </div>
-                
-                <div class="input-group">
-                    <label>Maksimum Hız:</label>
-                    <input type="number" id="maxSpeed" min="0" max="255" value="255">
-                </div>
-                
-                <div class="input-group">
-                    <label>Minimum Hız:</label>
-                    <input type="number" id="minSpeed" min="0" max="255" value="50">
-                </div>
-                
-                <button class="btn" onclick="updateSpeed()">🏁 Hız Ayarlarını Güncelle</button>
-                
-                <div id="speedAlerts"></div>
-            </div>
-
-            <!-- Motor Kontrol -->
-            <div class="card">
-                <h2>🎮 Motor Kontrol</h2>
-                
-                <div class="direction-display">
-                    <div class="direction-text" id="currentDirection">STOP</div>
-                </div>
-                
-                <div class="motor-speeds">
-                    <div class="speed-indicator">
-                        <div>Sol Motor</div>
-                        <div class="speed-value" id="leftSpeed">0</div>
-                    </div>
-                    <div class="speed-indicator">
-                        <div>Sağ Motor</div>
-                        <div class="speed-value" id="rightSpeed">0</div>
-                    </div>
-                </div>
-                
-                <div class="input-group">
-                    <label>Manuel Hız:</label>
-                    <input type="range" id="manualSpeed" min="50" max="255" value="150">
-                    <span id="speedValue">150</span>
-                </div>
-                
-                <div class="control-grid">
-                    <button class="btn btn-success" onclick="motorControl('forward')">⬆️ İleri</button>
-                    <button class="btn btn-warning" onclick="motorControl('left')">⬅️ Sol</button>
-                    <button class="btn btn-warning" onclick="motorControl('right')">➡️ Sağ</button>
-                    <button class="btn" onclick="motorControl('backward')">⬇️ Geri</button>
-                    <button class="btn btn-danger" onclick="motorControl('stop')">⏹️ Durdur</button>
-                    <button class="btn btn-success" onclick="motorControl('start')">▶️ Başlat</button>
-                </div>
-                
-                <div id="motorAlerts"></div>
-            </div>
-
-            <!-- QTR Sensör Verileri -->
-            <div class="card">
-                <h2>👁️ QTR Sensör Verileri</h2>
-                
-                <div class="data-display">
-                    <div class="data-row">
-                        <span class="data-label">Çizgi Pozisyonu:</span>
-                        <span class="data-value" id="linePosition">0</span>
-                    </div>
-                    <div class="data-row">
-                        <span class="data-label">Çizgi Durumu:</span>
-                        <span class="data-value" id="lineDetected">❌ Bulunamadı</span>
-                    </div>
-                    <div class="data-row">
-                        <span class="data-label">Son Güncelleme:</span>
-                        <span class="data-value" id="qtrLastUpdate">-</span>
-                    </div>
-                </div>
-                
-                <h3 style="margin: 15px 0 10px 0;">Sensör Değerleri:</h3>
-                <div class="sensor-grid" id="sensorGrid">
-                    <!-- Sensör değerleri dinamik olarak eklenecek -->
-                </div>
-            </div>
-
-            <!-- RFID Geçmişi -->
-            <div class="card">
-                <h2>📋 RFID İşlem Geçmişi</h2>
-                
-                <h3>Son Okumalar:</h3>
-                <div id="cardHistory" style="max-height: 200px; overflow-y: auto;">
-                    <!-- Dinamik içerik -->
-                </div>
-                
-                <h3 style="margin-top: 20px;">Yazma Geçmişi:</h3>
-                <div id="writeHistory" style="max-height: 200px; overflow-y: auto;">
-                    <!-- Dinamik içerik -->
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
         // Socket.IO bağlantısı
         const socket = io();
         
-        // Bağlantı olayları
-        socket.on('connect', function() {
-            console.log('Socket.IO bağlantısı kuruldu');
+        // Global değişkenler
+        let rfidData = {};
+        let i2cData = {};
+        let motorData = {};
+        let qtrData = {};
+
+        // Sayfa yüklendiğinde
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSocket();
+            updateMQTTStatus();
+            setInterval(updateMQTTStatus, 5000);
         });
-        
-        socket.on('disconnect', function() {
-            console.log('Socket.IO bağlantısı kesildi');
-        });
-        
-        // RFID güncellemeleri
-        socket.on('rfid_update', function(data) {
-            updateRFIDData(data);
-        });
-        
-        socket.on('write_status', function(data) {
-            showAlert('rfidAlerts', data.status === 'success' ? 'success' : 'error', 
-                      `Yazma ${data.status === 'success' ? 'başarılı' : 'başarısız'}: ${data.card_id}`);
-        });
-        
-        // I2C güncellemeleri
-        socket.on('i2c_update', function(data) {
-            updateI2CData(data);
-        });
-        
-        socket.on('i2c_status_update', function(data) {
-            updateSystemStatus(data);
-        });
-        
-        socket.on('motor_update', function(data) {
-            updateMotorData(data);
-        });
-        
-        socket.on('qtr_update', function(data) {
-            updateQTRData(data);
-        });
-        
-        // Hız slider güncelleme
-        document.getElementById('manualSpeed').addEventListener('input', function() {
-            document.getElementById('speedValue').textContent = this.value;
-        });
-        
-        // RFID verisini güncelle
-        function updateRFIDData(data) {
-            document.getElementById('lastCardId').textContent = data.last_card_id || 'Henüz kart okunmadı';
-            document.getElementById('lastReadTime').textContent = data.last_read_time || '-';
-            document.getElementById('totalReads').textContent = data.total_reads || 0;
-            document.getElementById('totalWrites').textContent = data.total_writes || 0;
-            
-            // Kart geçmişini güncelle
-            const cardHistory = document.getElementById('cardHistory');
-            cardHistory.innerHTML = '';
-            (data.card_history || []).forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'history-item';
-                div.innerHTML = `
-                    <strong>ID:</strong> ${item.card_id}<br>
-                    <strong>Veri:</strong> ${item.data || 'Boş'}<br>
-                    <div class="history-time">${item.time}</div>
-                `;
-                cardHistory.appendChild(div);
+
+        // Socket.IO bağlantısı
+        function initializeSocket() {
+            socket.on('connect', function() {
+                console.log('WebSocket bağlandı');
+                showToast('Bağlantı kuruldu', 'success');
             });
-            
-            // Yazma geçmişini güncelle
-            const writeHistory = document.getElementById('writeHistory');
-            writeHistory.innerHTML = '';
-            (data.write_history || []).forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'history-item';
-                div.style.borderLeftColor = item.status === 'success' ? '#10b981' : '#ef4444';
-                div.innerHTML = `
-                    <strong>ID:</strong> ${item.card_id}<br>
-                    <strong>Veri:</strong> ${item.data}<br>
-                    <strong>Durum:</strong> ${item.status === 'success' ? '✅ Başarılı' : '❌ Başarısız'}<br>
-                    <div class="history-time">${item.time}</div>
-                `;
-                writeHistory.appendChild(div);
+
+            socket.on('disconnect', function() {
+                console.log('WebSocket bağlantısı kesildi');
+                showToast('Bağlantı kesildi', 'error');
+            });
+
+            // RFID güncellemeleri
+            socket.on('rfid_update', function(data) {
+                rfidData = data;
+                updateRFIDDisplay();
+            });
+
+            // I2C güncellemeleri
+            socket.on('i2c_update', function(data) {
+                i2cData = data;
+                updateI2CDisplay();
+            });
+
+            // Motor güncellemeleri
+            socket.on('motor_update', function(data) {
+                motorData = data;
+                updateMotorDisplay();
+            });
+
+            // QTR güncellemeleri
+            socket.on('qtr_update', function(data) {
+                qtrData = data;
+                updateQTRDisplay();
+            });
+
+            // Yazma durumu
+            socket.on('write_status', function(data) {
+                showToast(`Yazma durumu: ${data.status}`, data.status === 'success' ? 'success' : 'error');
             });
         }
-        
-        // I2C verilerini güncelle
-        function updateI2CData(data) {
+
+        // MQTT durumunu güncelle
+        function updateMQTTStatus() {
+            fetch('/api/mqtt-status')
+                .then(res => res.json())
+                .then(data => {
+                    const indicator = document.getElementById('mqttStatusIndicator');
+                    const text = document.getElementById('mqttStatusText');
+                    const statusItem = document.getElementById('mqttStatusItem');
+                    
+                    if (data.connected) {
+                        indicator.className = 'status-indicator status-connected';
+                        text.textContent = 'Bağlı';
+                        statusItem.className = 'status-item active';
+                    } else {
+                        indicator.className = 'status-indicator status-disconnected';
+                        text.textContent = 'Bağlı Değil';
+                        statusItem.className = 'status-item inactive';
+                    }
+                })
+                .catch(() => {
+                    const indicator = document.getElementById('mqttStatusIndicator');
+                    const text = document.getElementById('mqttStatusText');
+                    indicator.className = 'status-indicator status-disconnected';
+                    text.textContent = 'Hata';
+                });
+        }
+
+        // RFID görüntüsünü güncelle
+        function updateRFIDDisplay() {
+            document.getElementById('lastCardId').textContent = rfidData.last_card_id || 'Henüz kart okunmadı';
+            document.getElementById('totalReads').textContent = rfidData.total_reads || 0;
+            document.getElementById('totalWrites').textContent = rfidData.total_writes || 0;
+            
+            // Geçmişi güncelle
+            updateRFIDHistory();
+        }
+
+        // RFID geçmişini güncelle
+        function updateRFIDHistory() {
+            const history = document.getElementById('rfidHistory');
+            const cardHistory = rfidData.card_history || [];
+            const writeHistory = rfidData.write_history || [];
+            
+            let html = '';
+            
+            // Son 5 işlemi göster
+            const allHistory = [...cardHistory, ...writeHistory]
+                .sort((a, b) => new Date(b.time) - new Date(a.time))
+                .slice(0, 5);
+            
+            if (allHistory.length === 0) {
+                html = '<tr><td colspan="4" class="text-center text-white-50">Henüz işlem yok</td></tr>';
+            } else {
+                allHistory.forEach(item => {
+                    const time = new Date(item.time).toLocaleTimeString();
+                    const type = item.type === 'read' ? 'Okuma' : 'Yazma';
+                    const status = item.status || 'Başarılı';
+                    const statusClass = status === 'success' ? 'text-success' : 'text-danger';
+                    
+                    html += `
+                        <tr>
+                            <td>${time}</td>
+                            <td>${item.card_id || '-'}</td>
+                            <td>${type}</td>
+                            <td class="${statusClass}">${status}</td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            history.innerHTML = html;
+        }
+
+        // I2C görüntüsünü güncelle
+        function updateI2CDisplay() {
+            const systemStatus = i2cData.system_status || {};
+            
+            document.getElementById('i2cConnection').textContent = 
+                systemStatus.i2c_connected ? 'Bağlı' : 'Bağlı Değil';
+            
+            document.getElementById('motorStatus').textContent = 
+                systemStatus.motor_active ? 'Aktif' : 'Durdu';
+            
+            document.getElementById('qtrStatus').textContent = 
+                systemStatus.qtr_active ? 'Aktif' : 'Pasif';
+            
             // PID ayarlarını güncelle
-            if (data.pid_settings) {
-                document.getElementById('pidKp').value = data.pid_settings.kp;
-                document.getElementById('pidKi').value = data.pid_settings.ki;
-                document.getElementById('pidKd').value = data.pid_settings.kd;
-                document.getElementById('pidSetpoint').value = data.pid_settings.setpoint;
-            }
-            
-            // Pin ayarlarını güncelle
-            if (data.pin_settings) {
-                document.getElementById('motorLeftPin1').value = data.pin_settings.motor_left_pin1;
-                document.getElementById('motorLeftPin2').value = data.pin_settings.motor_left_pin2;
-                document.getElementById('motorRightPin1').value = data.pin_settings.motor_right_pin1;
-                document.getElementById('motorRightPin2').value = data.pin_settings.motor_right_pin2;
-                document.getElementById('enableLeft').value = data.pin_settings.enable_left;
-                document.getElementById('enableRight').value = data.pin_settings.enable_right;
-            }
-            
-            // Hız ayarlarını güncelle
-            if (data.speed_control) {
-                document.getElementById('baseSpeed').value = data.speed_control.base_speed;
-                document.getElementById('maxSpeed').value = data.speed_control.max_speed;
-                document.getElementById('minSpeed').value = data.speed_control.min_speed;
-            }
+            const pidSettings = i2cData.pid_settings || {};
+            document.getElementById('kpInput').value = pidSettings.kp || 2.0;
+            document.getElementById('kiInput').value = pidSettings.ki || 0.1;
+            document.getElementById('kdInput').value = pidSettings.kd || 0.5;
+            document.getElementById('setpointInput').value = pidSettings.setpoint || 0;
         }
-        
-        // Sistem durumunu güncelle
-        function updateSystemStatus(data) {
-            // I2C durum
-            const i2cStatus = document.getElementById('i2cStatus');
-            const i2cStatusText = document.getElementById('i2cStatusText');
-            if (data.i2c_connected) {
-                i2cStatus.className = 'status-indicator status-connected';
-                i2cStatusText.textContent = 'Bağlı';
-            } else {
-                i2cStatus.className = 'status-indicator status-disconnected';
-                i2cStatusText.textContent = 'Bağlı Değil';
+
+        // Motor görüntüsünü güncelle
+        function updateMotorDisplay() {
+            const motor = motorData || {};
+            
+            document.getElementById('leftSpeed').textContent = motor.left_speed || 0;
+            document.getElementById('rightSpeed').textContent = motor.right_speed || 0;
+            document.getElementById('motorDirection').textContent = motor.direction || 'Durdu';
+        }
+
+        // QTR görüntüsünü güncelle
+        function updateQTRDisplay() {
+            const qtr = qtrData || {};
+            
+            document.getElementById('qtrPosition').textContent = qtr.position || 0;
+            document.getElementById('lineDetected').textContent = qtr.line_detected ? 'Evet' : 'Hayır';
+            
+            // Sensör grid'ini güncelle
+            updateSensorGrid(qtr.sensors || []);
+        }
+
+        // Sensör grid'ini güncelle
+        function updateSensorGrid(sensors) {
+            const grid = document.getElementById('sensorGrid');
+            let html = '';
+            
+            for (let i = 0; i < 8; i++) {
+                const value = sensors[i] || 0;
+                const isActive = value > 0;
+                const className = isActive ? 'sensor-item sensor-active' : 'sensor-item';
+                
+                html += `<div class="${className}">${value}</div>`;
             }
             
-            // Motor durum
-            const motorStatus = document.getElementById('motorStatus');
-            const motorStatusText = document.getElementById('motorStatusText');
-            if (data.motor_active) {
-                motorStatus.className = 'status-indicator status-active';
-                motorStatusText.textContent = 'Aktif';
-            } else {
-                motorStatus.className = 'status-indicator status-disconnected';
-                motorStatusText.textContent = 'Pasif';
-            }
-            
-            // QTR durum
-            const qtrStatus = document.getElementById('qtrStatus');
-            const qtrStatusText = document.getElementById('qtrStatusText');
-            if (data.qtr_active) {
-                qtrStatus.className = 'status-indicator status-active';
-                qtrStatusText.textContent = 'Aktif';
-            } else {
-                qtrStatus.className = 'status-indicator status-disconnected';
-                qtrStatusText.textContent = 'Pasif';
-            }
-            
-            document.getElementById('lastPing').textContent = data.last_ping || '-';
+            grid.innerHTML = html;
         }
-        
-        // Motor verilerini güncelle
-        function updateMotorData(data) {
-            document.getElementById('leftSpeed').textContent = data.left_speed || 0;
-            document.getElementById('rightSpeed').textContent = data.right_speed || 0;
-            document.getElementById('currentDirection').textContent = (data.direction || 'stop').toUpperCase();
-        }
-        
-        // QTR verilerini güncelle
-        function updateQTRData(data) {
-            document.getElementById('linePosition').textContent = data.position || 0;
-            document.getElementById('lineDetected').textContent = data.line_detected ? '✅ Bulundu' : '❌ Bulunamadı';
-            document.getElementById('qtrLastUpdate').textContent = data.last_update || '-';
-            
-            // Sensör değerlerini güncelle
-            const sensorGrid = document.getElementById('sensorGrid');
-            sensorGrid.innerHTML = '';
-            (data.sensors || [0,0,0,0,0,0,0,0]).forEach((value, index) => {
-                const div = document.createElement('div');
-                div.className = `sensor-value ${value > 500 ? 'sensor-active' : ''}`;
-                div.innerHTML = `S${index + 1}<br>${value}`;
-                sensorGrid.appendChild(div);
-            });
-        }
-        
+
         // RFID yazma
         function writeRFID() {
-            const cardId = document.getElementById('writeCardId').value;
-            const data = document.getElementById('writeData').value;
+            const cardId = document.getElementById('cardIdInput').value;
+            const data = document.getElementById('writeDataInput').value;
             
             if (!data.trim()) {
-
+                showToast('Lütfen yazılacak veriyi girin', 'error');
                 return;
             }
             
@@ -752,205 +877,94 @@
                 data: data
             });
             
-
+            showToast('Yazma komutu gönderildi', 'info');
+            document.getElementById('writeDataInput').value = '';
         }
-        
+
         // PID güncelleme
         function updatePID() {
-            const pidData = {
-                kp: parseFloat(document.getElementById('pidKp').value),
-                ki: parseFloat(document.getElementById('pidKi').value),
-                kd: parseFloat(document.getElementById('pidKd').value),
-                setpoint: parseFloat(document.getElementById('pidSetpoint').value)
-            };
+            const kp = parseFloat(document.getElementById('kpInput').value);
+            const ki = parseFloat(document.getElementById('kiInput').value);
+            const kd = parseFloat(document.getElementById('kdInput').value);
+            const setpoint = parseFloat(document.getElementById('setpointInput').value);
             
-            socket.emit('update_pid_settings', pidData);
-
-        }
-        
-        // Pin güncelleme
-        function updatePins() {
-            const pinData = {
-                motor_left_pin1: parseInt(document.getElementById('motorLeftPin1').value),
-                motor_left_pin2: parseInt(document.getElementById('motorLeftPin2').value),
-                motor_right_pin1: parseInt(document.getElementById('motorRightPin1').value),
-                motor_right_pin2: parseInt(document.getElementById('motorRightPin2').value),
-                enable_left: parseInt(document.getElementById('enableLeft').value),
-                enable_right: parseInt(document.getElementById('enableRight').value)
-            };
-            
-            fetch('/api/update-pins', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(pinData)
-            })
-            .then(response => response.json())
-            .then(data => {
-
+            socket.emit('update_pid_settings', {
+                kp: kp,
+                ki: ki,
+                kd: kd,
+                setpoint: setpoint
             });
+            
+            showToast('PID ayarları güncellendi', 'success');
         }
-        
-        // Motor kontrol
+
+        // Motor kontrolü
         function motorControl(action) {
-            const speed = parseInt(document.getElementById('manualSpeed').value);
+            const speed = parseInt(document.getElementById('speedSlider').value);
             
             socket.emit('motor_command', {
                 action: action,
                 speed: speed
             });
             
-
+            showToast(`Motor komutu: ${action}`, 'info');
         }
-        
-        // Alert gösterme
-        function showAlert(containerId, type, message) {
-            const container = document.getElementById(containerId);
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
-            alert.textContent = message;
+
+        // Hız slider'ı
+        document.getElementById('speedSlider').addEventListener('input', function() {
+            document.getElementById('speedValue').textContent = this.value;
+        });
+
+        // Toast bildirimi göster
+        function showToast(message, type = 'info') {
+            const container = document.querySelector('.toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.style.minWidth = '250px';
             
-            container.innerHTML = '';
-            container.appendChild(alert);
+            const bgClass = type === 'success' ? 'bg-success' : 
+                           type === 'error' ? 'bg-danger' : 
+                           type === 'warning' ? 'bg-warning' : 'bg-info';
             
-            // 5 saniye sonra alert'i kaldır
+            toast.innerHTML = `
+                <div class="toast-header ${bgClass} text-white">
+                    <strong class="me-auto">Bildirim</strong>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                </div>
+            `;
+            
+            container.appendChild(toast);
+            
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+            
+            // 3 saniye sonra kaldır
             setTimeout(() => {
-                if (alert.parentNode) {
-                    alert.parentNode.removeChild(alert);
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
                 }
-            }, 5000);
+            }, 3000);
         }
-        
-        // Socket event'leri için başarı mesajları
-        socket.on('write_sent', function(data) {
 
-        });
-        
-        socket.on('write_error', function(data) {
-
-        });
-        
-        socket.on('pid_update_success', function(data) {
-
-        });
-        
-        socket.on('pid_update_error', function(data) {
-
-        });
-        
-        socket.on('motor_command_sent', function(data) {
-
-        });
-        
-        socket.on('motor_command_error', function(data) {
-
-        });
-        
-        // Sayfa yüklendiğinde başlangıç verileri al
-        window.addEventListener('load', function() {
-            // RFID verilerini al
-            fetch('/api/rfid-data')
-                .then(response => response.json())
-                .then(data => updateRFIDData(data))
-                .catch(error => console.error('RFID veri alım hatası:', error));
-            
-            // I2C verilerini al
-            fetch('/api/i2c-data')
-                .then(response => response.json())
-                .then(data => {
-                    updateI2CData(data);
-                    updateSystemStatus(data.system_status);
-                    updateMotorData(data.motor_data);
-                    updateQTRData(data.qtr_data);
-                })
-                .catch(error => console.error('I2C veri alım hatası:', error));
-        });
-        
-        // Klavye kısayolları
-        document.addEventListener('keydown', function(event) {
-            // Sadece Ctrl tuşu ile beraber
-            if (event.ctrlKey) {
-                switch(event.key) {
-                    case 'ArrowUp':
-                        event.preventDefault();
-                        motorControl('forward');
-                        break;
-                    case 'ArrowDown':
-                        event.preventDefault();
-                        motorControl('backward');
-                        break;
-                    case 'ArrowLeft':
-                        event.preventDefault();
-                        motorControl('left');
-                        break;
-                    case 'ArrowRight':
-                        event.preventDefault();
-                        motorControl('right');
-                        break;
-                    case ' ': // Space tuşu
-                        event.preventDefault();
-                        motorControl('stop');
-                        break;
+        // Navbar link'lerini aktif hale getir
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                if (this.getAttribute('href').startsWith('#')) {
+                    e.preventDefault();
+                    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    const targetId = this.getAttribute('href').substring(1);
+                    const targetElement = document.getElementById(targetId);
+                    if (targetElement) {
+                        targetElement.scrollIntoView({ behavior: 'smooth' });
+                    }
                 }
-            }
+            });
         });
-        
-        // Global hata yakalayıcı - konsol hatalarını gizle
-        window.addEventListener('error', function(e) {
-            console.error('Sayfa hatası:', e.error);
-            return true; // Hatayı gizle
-        });
-        
-        // Promise hatalarını yakala
-        window.addEventListener('unhandledrejection', function(e) {
-            console.error('Promise hatası:', e.reason);
-            e.preventDefault(); // Hatayı gizle
-        });
-        
-        // Periyodik durum kontrolü (her 5 saniyede bir)
-        setInterval(function() {
-            fetch('/api/i2c-data')
-                .then(response => response.json())
-                .then(data => {
-                    updateSystemStatus(data.system_status);
-                })
-                .catch(error => {
-                    // Bağlantı hatası durumunda durumları güncelle
-                    updateSystemStatus({
-                        i2c_connected: false,
-                        motor_active: false,
-                        qtr_active: false,
-                        last_ping: 'Bağlantı Hatası'
-                    });
-                });
-        }, 5000);
-    
-      // MQTT durumunu güncelle
-      function updateMQTTStatus() {
-        fetch('/api/mqtt-status')
-          .then(res => res.json())
-          .then(data => {
-            const ind = document.getElementById('mqttStatusIndicator');
-            const txt = document.getElementById('mqttStatusText');
-            if (data.connected) {
-              ind.className = 'status-indicator status-connected';
-              txt.textContent = 'Bağlı';
-            } else {
-              ind.className = 'status-indicator status-disconnected';
-              txt.textContent = 'Bağlı Değil';
-            }
-          })
-          .catch(() => {
-            const ind = document.getElementById('mqttStatusIndicator');
-            const txt = document.getElementById('mqttStatusText');
-            ind.className = 'status-indicator status-disconnected';
-            txt.textContent = 'Hata';
-          });
-      }
-      window.addEventListener('load', updateMQTTStatus);
-      setInterval(updateMQTTStatus, 5000);
-
     </script>
 </body>
-</html>
+</html> 
