@@ -16,10 +16,10 @@ int leftBaseSpeed = 50;
 #define L_EN_R 8 
 
 // Sol Motor
-#define RPWM_L 6
-#define LPWM_L 5
-#define R_EN_L 4
-#define L_EN_L 3
+#define RPWM_L 5
+#define LPWM_L 6
+#define R_EN_L 3
+#define L_EN_L 4
 
 // ---- QTR Sensör Ayarları ----
 QTRSensors qtr;

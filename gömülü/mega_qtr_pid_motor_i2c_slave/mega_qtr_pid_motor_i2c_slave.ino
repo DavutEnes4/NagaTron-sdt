@@ -12,16 +12,16 @@ int leftBaseSpeed = 50;
 
 // ---- Motor Pinleri (BTS7960B) ----
 // Sağ Motor
-#define RPWM_R 9   // Sağ motor ileri PWM
-#define LPWM_R 10  // Sağ motor geri PWM
+#define RPWM_R 10   // Sağ motor ileri PWM
+#define LPWM_R 9  // Sağ motor geri PWM
 #define R_EN_R 7   // Sağ motor R_EN
 #define L_EN_R 8   // Sağ motor L_EN
 
 // Sol Motor
 #define RPWM_L 6   // Sol motor ileri PWM
 #define LPWM_L 5   // Sol motor geri PWM
-#define R_EN_L 4   // Sol motor R_EN
-#define L_EN_L 3   // Sol motor L_EN
+#define R_EN_L 3   // Sol motor R_EN
+#define L_EN_L 4   // Sol motor L_EN
 
 // ---- QTR Sensör Ayarları ----
 QTRSensors qtr;
