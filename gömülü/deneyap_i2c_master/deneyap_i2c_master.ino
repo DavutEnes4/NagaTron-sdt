@@ -1,7 +1,6 @@
 #include <Wire.h>
 
-// I²C Slave adresi (Arduino Mega)
-#define SLAVE_ADDRESS 8
+#define SLAVE_ADDRESS 42
 
 // Kontrol parametreleri
 int targetSpeed = 50;
