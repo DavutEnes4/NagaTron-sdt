@@ -209,8 +209,7 @@ void setupMotors(){
   enableMotors();
 }
 
-void calibrateQTR()
-{
+void calibrateQTR(){
   for (int i = 0; i < 100; i++) {
     if (i % 2 == 0) {
       turn_right();
@@ -223,8 +222,7 @@ void calibrateQTR()
   stopMotors();
 }
 
-void setup()
-{
+void setup(){
   Wire.begin(I2C_SLAVE_ADDRESS);  // I2C slave adresin 0x42
   Wire.onReceive(receiveEvent);   // Master'dan veri geldiğinde çağrılır
   Wire.onRequest(requestEvent);   // Master veri istediğinde çağrılır
@@ -253,8 +251,7 @@ void setup()
   delay(1000);
 }
 
-void loop()
-{
+void loop(){
    if (newMessage) {
     newMessage = false;
     handleI2CCommand(i2cBuffer);
