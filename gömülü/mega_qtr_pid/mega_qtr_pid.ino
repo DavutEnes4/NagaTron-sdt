@@ -10,8 +10,8 @@ int leftBaseSpeed = 50;
 
 // ---- Motor Pinleri (BTS7960B) ----
 // Sağ Motor
-#define RPWM_R 9
-#define LPWM_R 10
+#define RPWM_R 10
+#define LPWM_R 9
 #define R_EN_R 7
 #define L_EN_R 8 
 
@@ -30,6 +30,7 @@ int lastError = 0;
 
 void setup()
 {
+  Serial.begin(115200);
   // QTR sensör
   qtr.setTypeAnalog();
   qtr.setSensorPins((const uint8_t[]){A7, A6, A5, A4, A3, A2, A1, A0}, SensorCount);
@@ -55,14 +56,16 @@ void setup()
   rightBaseSpeed = 50;
   int tempLeft = leftBaseSpeed;
   leftBaseSpeed = 50;
-  for (int i = 0; i < 100; i++) {
-    if (i % 2 == 0) {
+  for (int i = 0; i < 1000; i++) {
+    if (i % 10 < 5) {
+      Serial.println("Sag");
       turn_right();
     } else {
+      Serial.println("Sol");
       turn_left();
     }
     qtr.calibrate();
-    delay(250);
+    delay(25);
   }
   rightBaseSpeed = tempRight;
   leftBaseSpeed = tempLeft;
@@ -73,7 +76,7 @@ void setup()
 
 void loop()
 {
-  unsigned int position = qtr.readLineBlack(sensorValues);
+  uint16_t position = qtr.readLineBlack(sensorValues);
   int error = position - 3500;
   int motorSpeed = Kp * error + Kd * (error - lastError);
   lastError = error;
@@ -88,6 +91,12 @@ void loop()
 
   setMotorSpeeds(rightMotorSpeed, leftMotorSpeed);
 
+  for (uint8_t i = 0; i < SensorCount; i++)
+  {
+    Serial.print(sensorValues[i]);
+    Serial.print('\t');
+  }
+  Serial.println(position);
 }
 
 // ---- Motor Fonksiyonları ----

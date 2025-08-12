@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Robot Kontrol Paneli</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #f5f5f5; padding: 20px; }
+    h2 { margin-top: 30px; }
+    input, select, button { padding: 8px; margin: 5px; }
+    #logArea { background: black; color: lime; padding: 10px; height: 200px; overflow-y: auto; font-family: monospace; }
+    .section { margin-bottom: 25px; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 5px #ccc; }
+  </style>
+</head>
+<body>
+
+  <h1>📡 Robot Kontrol Paneli</h1>
+
+  <div class="section">
+    <h2>Mod Seçimi</h2>
+    <select id="modeSelect">
+      <option value="LINE">Çizgi Takip (LINE)</option>
+      <option value="MANUAL">Manuel (MANUAL)</option>
+    </select>
+    <button onclick="setMode()">MOD GÖNDER</button>
+  </div>
+
+  <div class="section">
+    <h2>Temel Komutlar</h2>
+    <button onclick="sendCommand('START')">START</button>
+    <button onclick="sendCommand('STOP')">STOP</button>
+    <button onclick="sendCommand('RESTART')">RESTART</button>
+  </div>
+
+  <div class="section">
+    <h2>Hız ve PID Ayarı</h2>
+    Hız: <input type="number" id="speedInput" value="50">
+    <button onclick="sendSpeed()">HIZ GÖNDER</button><br>
+    Kp: <input type="number" id="kp" value="0.4" step="0.1">
+    Ki: <input type="number" id="ki" value="0.0" step="0.01">
+    Kd: <input type="number" id="kd" value="2.0" step="0.1">
+    <button onclick="sendPID()">PID GÖNDER</button>
+  </div>
+
+  <div class="section">
+    <h2>Manuel Komut</h2>
+    MOVE: <input id="moveInput" placeholder="örn: 1,-1">
+    <button onclick="sendMove()">MOVE</button><br>
+    ANGLE: <input id="angleInput" placeholder="örn: 90">
+    <button onclick="sendAngle()">ANGLE</button>
+  </div>
+
+  <div class="section">
+    <h2>📥 Geri Bildirim (robot/log)</h2>
+    <div id="logArea">Bağlantı bekleniyor...</div>
+  </div>
+
+<script>
+  // MQTT bağlantı ayarları
+  const broker = 'ws://nagatron-sdt.local:9001'; // WebSocket üzerinden MQTT
+  const commandTopic = 'robot/command';
+  const logTopic = 'robot/log';
+
+  const client = mqtt.connect(broker);
+
+  client.on('connect', () => {
+    logPrint("MQTT bağlantısı başarılı!");
+    client.subscribe(logTopic);
+  });
+
+  client.on('message', (topic, payload) => {
+    if (topic === logTopic) {
+      logPrint("LOG: " + payload.toString());
+    }
+  });
+
+  function sendCommand(cmd) {
+    const msg = { cmd };
+    client.publish(commandTopic, JSON.stringify(msg));
+    logPrint("GÖNDERİLDİ: " + JSON.stringify(msg));
+  }
+
+  function setMode() {
+    const mode = document.getElementById("modeSelect").value;
+    const msg = { mode };
+    client.publish(commandTopic, JSON.stringify(msg));
+    logPrint("MOD GÖNDERİLDİ: " + mode);
+  }
+
+  function sendSpeed() {
+    const speed = parseInt(document.getElementById("speedInput").value);
+    const msg = { speed };
+    client.publish(commandTopic, JSON.stringify(msg));
+    logPrint("HIZ GÖNDERİLDİ: " + speed);
+  }
+
+  function sendPID() {
+    const kp = parseFloat(document.getElementById("kp").value);
+    const ki = parseFloat(document.getElementById("ki").value);
+    const kd = parseFloat(document.getElementById("kd").value);
+    const msg = { Kp: kp, Ki: ki, Kd: kd };
+    client.publish(commandTopic, JSON.stringify(msg));
+    logPrint("PID GÖNDERİLDİ: " + JSON.stringify(msg));
+  }
+
+  function sendMove() {
+    const value = document.getElementById("moveInput").value;
+    const msg = { cmd: "MOVE:" + value };
+    client.publish(commandTopic, JSON.stringify(msg));
+    logPrint("MOVE GÖNDERİLDİ: " + value);
+  }
+
+  function sendAngle() {
+    const value = document.getElementById("angleInput").value;
+    const msg = { cmd: "ANGLE:" + value };
+    client.publish(commandTopic, JSON.stringify(msg));
+    logPrint("ANGLE GÖNDERİLDİ: " + value);
+  }
+
+  function logPrint(msg) {
+    const area = document.getElementById("logArea");
+    const timestamp = new Date().toLocaleTimeString();
+    area.innerHTML += `[${timestamp}] ${msg}<br>`;
+    area.scrollTop = area.scrollHeight;
+  }
+</script>
+</body>
+</html>
