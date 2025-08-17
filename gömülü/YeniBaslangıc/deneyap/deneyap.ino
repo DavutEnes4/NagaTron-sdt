@@ -4,8 +4,8 @@
 #include <Wire.h>
 
 // ---- WiFi Ayarları ----
-const char* ssid = "FenveTeknoloji";
-const char* password = "fentek2024";
+const char* ssid = "Furkan's Galaxy S20 FE";
+const char* password = "12345678";
 
 // ---- MQTT Ayarları ----
 const char* mqtt_server = "nagatron-sdt.local";

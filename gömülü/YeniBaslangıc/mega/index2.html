@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Robot + RFID Kontrol Paneli</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    :root{ --bg:#f5f5f5; --card:#fff; --ink:#111; --muted:#666; --shadow:#0002; --ok:#2e7d32; --bad:#c62828; --pri:#1976d2; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--ink); padding: 24px; }
+    h1 { margin: 0 0 16px; }
+    h2 { margin: 0 0 10px; font-size: 18px; }
+    .row { display: flex; flex-wrap: wrap; gap: 16px; }
+    .section { flex: 1 1 380px; background: var(--card); border-radius: 10px; padding: 16px; box-shadow: 0 6px 16px var(--shadow); }
+    input, select, button, textarea { padding: 8px 10px; margin: 6px 6px 6px 0; font-size: 14px; }
+    button { cursor: pointer; border: 0; border-radius: 8px; background: var(--pri); color: #fff; }
+    button.secondary { background: #616161; }
+    button.warn { background: #ef6c00; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    label { color: var(--muted); font-size: 13px; display: inline-block; margin-right: 8px; }
+    #logArea { background: #000; color: #b7ffb7; padding: 10px; height: 260px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; border-radius: 8px; }
+    .status { font-size: 14px; margin-left: 8px; }
+    .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; background: #bbb; }
+    .dot.ok { background: var(--ok); }
+    .dot.bad { background: var(--bad); }
+    .kv { display:grid; grid-template-columns: 140px 1fr; gap:6px 12px; align-items:center; }
+    .muted { color: var(--muted); font-size: 12px; }
+    table { width:100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; color:#fff; }
+    .pill.ok { background: var(--ok); }
+    .pill.bad { background: var(--bad); }
+    .pill.warn { background: #ef6c00; }
+    .dpad { display:grid; grid-template-columns: 64px 64px 64px; grid-template-rows: 48px 48px 48px; gap:8px; justify-content:center; align-items:center; }
+    .dpad button { width:64px; height:48px; }
+    .count { font-size: 12px; color: var(--muted); margin-left: 6px; }
+  </style>
+</head>
+<body>
+
+  <h1>📡 Robot + RFID Kontrol Paneli
+    <span class="status"><span id="connDot" class="dot"></span><span id="connText">Bağlantı yok</span></span>
+  </h1>
+
+  <div class="row">
+
+    <!-- Broker -->
+    <div class="section">
+      <h2>Broker</h2>
+      <label for="broker">WebSocket MQTT URL</label>
+      <input id="broker" size="34" value="ws://nagatron-sdt.local:9001" />
+      <button id="btnConnect" onclick="connectMQTT()">Bağlan</button>
+      <button class="secondary" onclick="disconnectMQTT()">Kes</button>
+      <div class="muted">Tarayıcı WebSocket (genelde 9001), ESP TCP (1883).</div>
+    </div>
+
+    <!-- Mod / Temel Komutlar -->
+    <div class="section">
+      <h2>Mod & Temel Komutlar (robot/command)</h2>
+      <div style="margin-bottom:8px;">
+        <label>Mod:</label>
+        <select id="modeSelect">
+          <option value="LINE">Çizgi Takip (LINE)</option>
+          <option value="MANUAL">Manuel (MANUAL)</option>
+        </select>
+        <button onclick="setMode()">MOD GÖNDER</button>
+      </div>
+      <div>
+        <button onclick="sendCommand('START')">START</button>
+        <button onclick="sendCommand('RESTART')">RESTART</button>
+        <button onclick="sendCommand('STOP')" class="warn">STOP</button>
+      </div>
+    </div>
+
+    <!-- Hız / PID / Açı / Yön -->
+    <div class="section">
+      <h2>Hız, PID, Açı, Teker Yönü</h2>
+      <div>
+        <label>Hız:</label>
+        <input type="number" id="speedInput" value="75" min="0" max="255" />
+        <button onclick="sendSpeed()">HIZ GÖNDER</button>
+      </div>
+      <div>
+        <lu>
+          <li>
+        <label>Kp:</label><input type="number" id="kp" value="0.8" step="0.1" />
+
+          </li>
+          <li>
+        <label>Ki:</label><input type="number" id="ki" value="0.0" step="0.01" />
+          </li>
+          <li>
+        <label>Kd:</label><input type="number" id="kd" value="2.0" step="0.1" />
+          </li>
+        </lu>
+        <button onclick="sendPID()">PID GÖNDER</button>
+      </div>
+      <div>
+        <label>ANGLE (°):</label>
+        <input id="angleInput" placeholder="örn: 90" />
+        <button onclick="sendAngle()">ANGLE</button>
+      </div>
+      <div>
+        <label>Sağ:</label>
+        <select id="dirR"><option value="1">Normal (+1)</option><option value="-1">Ters (-1)</option><option value="0">Dur(0)</option></select>
+        <label>Sol:</label>
+        <select id="dirL"><option value="1">Normal (+1)</option><option value="-1">Ters (-1)</option><option value="0">Dur(0)</option></select>
+        <button onclick="sendDir()">YÖN GÖNDER</button>
+      </div>
+    </div>
+
+    <!-- Yön Butonları (MOVE başlığı yok) -->
+    <div class="section">
+      <h2>Sürüş Kontrolleri</h2>
+      <div class="dpad">
+        <div></div>
+        <button onclick="publishCmd('MOVE:1,1')">⬆︎</button>
+        <div></div>
+
+        <button onclick="publishCmd('MOVE:-1,1')">⬅︎</button>
+        <button onclick="publishCmd('MOVE:0,0')">■</button>
+        <button onclick="publishCmd('MOVE:1,-1')">➡︎</button>
+
+        <div></div>
+        <button onclick="publishCmd('MOVE:-1,-1')">⬇︎</button>
+        <div></div>
+      </div>
+      <div class="muted">İleri=1,1 • Geri=-1,-1 • Sağ=1,-1 • Sol=-1,1 • Dur=0,0</div>
+    </div>
+
+    <!-- RFID Yaz -->
+    <div class="section">
+      <h2>Karta Yaz (rfid/write)</h2>
+      <div class="kv">
+        <label>Yazılacak Veri</label>
+        <div>
+          <input id="writeData" maxlength="16" placeholder="en fazla 16 karakter" oninput="updateLen()" />
+          <span id="lenInfo" class="count">0/16</span>
+        </div>
+        <label>Kart ID (ops.)</label>
+        <input id="cardId" placeholder="örn: 04A1B2C3D4 (opsiyonel)" />
+        <label></label>
+        <div>
+          <button onclick="sendWrite()">YAZ KOMUTU GÖNDER</button>
+          <button class="secondary" onclick="clearWriteForm()">Temizle</button>
+        </div>
+      </div>
+      <div class="muted">Json: {"action":"write","data":"...","card_id":"..."} • 30 sn içinde kartı okut.</div>
+    </div>
+
+    <!-- RFID Okuma -->
+    <div class="section">
+      <h2>Kart Okuma (rfid/data)</h2>
+      <div class="kv">
+        <label>Son Kart ID</label><div id="lastCard">-</div>
+        <label>Son Veri</label><div id="lastData">-</div>
+        <label>Zaman</label><div id="lastTime">-</div>
+        <label>Cihaz</label><div id="lastDevice">-</div>
+      </div>
+      <div style="margin-top:10px;">
+        <table id="readTable">
+          <thead><tr><th>Zaman</th><th>Kart ID</th><th>Veri</th><th>Cihaz</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RFID Yazma Durumu -->
+    <div class="section">
+      <h2>Yazma Durumu (rfid/status)</h2>
+      <div class="kv">
+        <label>Durum</label><div id="statusVal">-</div>
+        <label>Kart ID</label><div id="statusCard">-</div>
+        <label>Veri</label><div id="statusData">-</div>
+        <label>Zaman</label><div id="statusTime">-</div>
+      </div>
+      <div style="margin-top:10px;">
+        <table id="statusTable">
+          <thead><tr><th>Zaman</th><th>Durum</th><th>Kart ID</th><th>Veri</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tek Log -->
+    <div class="section" style="flex-basis:100%">
+      <h2>📥 Log (robot/log + RFID)</h2>
+      <div id="logArea">Bağlantı bekleniyor...</div>
+      <div style="margin-top:8px;">
+        <button class="secondary" onclick="clearLog()">Logu Temizle</button>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+  // ==== Topic'ler ====
+  const robot = {
+    cmd: 'robot/command',
+    log: 'robot/log'
+  };
+  const rfid = {
+    read:   'rfid/data',
+    write:  'rfid/write',
+    status: 'rfid/status'
+  };
+
+  // ==== Durum ====
+  let client = null;
+  let connected = false;
+
+  // ==== Bağlantı ====
+  function setConnected(state, note='') {
+    connected = state;
+    const dot = document.getElementById('connDot');
+    const txt = document.getElementById('connText');
+    dot.className = 'dot' + (state ? ' ok' : ' bad');
+    txt.textContent = state ? ('Bağlı ' + note) : 'Bağlantı yok';
+    document.querySelectorAll('button').forEach(b=>{
+      if (b.id === 'btnConnect') return; // bağlan butonu hep aktif
+      b.disabled = !state && !b.classList.contains('secondary');
+    });
+  }
+
+  function connectMQTT() {
+    const url = document.getElementById('broker').value.trim();
+    if (!url) { logPrint('Broker URL boş olamaz'); return; }
+
+    if (client) { try { client.end(true); } catch(e){} }
+    logPrint('MQTT bağlanılıyor: ' + url + ' ...');
+
+    try {
+      client = mqtt.connect(url, { reconnectPeriod: 2000 });
+    } catch (e) {
+      logPrint('MQTT connect() hatası: ' + e);
+      return;
+    }
+
+    client.on('connect', () => {
+      setConnected(true);
+      logPrint('MQTT bağlantısı başarılı!');
+      // Robot log + RFID okuma & statü topic’lerine abone ol
+      client.subscribe([robot.log, rfid.read, rfid.status], (err)=>{
+        if (err) logPrint('Subscribe hata: ' + err);
+        else logPrint('Subscribed: ' + [robot.log, rfid.read, rfid.status].join(', '));
+      });
+    });
+
+    client.on('reconnect', () => {
+      setConnected(false, '(yeniden bağlanılıyor)');
+      logPrint('MQTT reconnect...');
+    });
+
+    client.on('offline', () => {
+      setConnected(false, '(offline)');
+      logPrint('MQTT offline');
+    });
+
+    client.on('error', (err) => {
+      setConnected(false, '(hata)');
+      logPrint('MQTT error: ' + err);
+    });
+
+    client.on('close', () => {
+      setConnected(false, '(kapandı)');
+      logPrint('MQTT connection closed');
+    });
+
+    client.on('message', (topic, payload) => {
+      const txt = payload.toString();
+      if (topic === robot.log) {
+        logPrint('ROBOT: ' + txt);
+      } else if (topic === rfid.read) {
+        handleRead(txt);
+      } else if (topic === rfid.status) {
+        handleStatus(txt);
+      } else {
+        logPrint(`Mesaj (${topic}): ${txt}`);
+      }
+    });
+  }
+
+  function disconnectMQTT() {
+    if (client) {
+      logPrint('MQTT bağlantısı kesiliyor...');
+      try { client.end(true); } catch(e){}
+      client = null;
+    }
+    setConnected(false);
+  }
+
+  // ==== ROBOT: Göndericiler ====
+  function publishCmd(cmd) {
+    if (!connected || !client) { logPrint('Bağlı değilken komut gönderilemez'); return; }
+    const payload = JSON.stringify({ cmd });
+    client.publish(robot.cmd, payload);
+    logPrint('CMD -> ' + payload);
+  }
+  function sendCommand(cmd) { publishCmd(cmd); }
+  function setMode() {
+    const mode = document.getElementById('modeSelect').value;
+    publishCmd('MODE:' + mode);
+  }
+  function sendSpeed() {
+    const v = parseInt(document.getElementById('speedInput').value, 10);
+    if (Number.isNaN(v)) { logPrint('Hız sayısal olmalı'); return; }
+    const spd = Math.max(0, Math.min(255, v));
+    publishCmd('SPD:' + spd);
+  }
+  function sendPID() {
+    const kp = parseFloat(document.getElementById('kp').value);
+    const ki = parseFloat(document.getElementById('ki').value);
+    const kd = parseFloat(document.getElementById('kd').value);
+    if ([kp,ki,kd].some(x=>Number.isNaN(x))) { logPrint('PID değerleri sayısal olmalı'); return; }
+    publishCmd('PID:' + kp + ',' + ki + ',' + kd);
+  }
+  function sendAngle() {
+    const raw = (document.getElementById('angleInput').value || '').trim();
+    const ang = parseInt(raw, 10);
+    if (Number.isNaN(ang)) { logPrint('ANGLE sayısal olmalı (örn: 90)'); return; }
+    publishCmd('ANGLE:' + ang);
+  }
+  function sendDir() {
+    const dr = parseInt(document.getElementById('dirR').value, 10);
+    const dl = parseInt(document.getElementById('dirL').value, 10);
+    publishCmd('DIR:' + dr + ',' + dl);
+  }
+
+  // ==== RFID: Göndericiler ====
+  function sendWrite() {
+    if (!connected || !client) { logPrint('Bağlı değilken komut gönderilemez'); return; }
+    const data = (document.getElementById('writeData').value || '').trim();
+    const cardId = (document.getElementById('cardId').value || '').trim();
+    if (!data) { logPrint('Yazılacak veri boş olamaz'); return; }
+    if (new TextEncoder().encode(data).length > 16) { logPrint('Veri 16 baytı aşamaz'); return; }
+    const msg = { action: 'write', data };
+    if (cardId) msg.card_id = cardId;
+    const payload = JSON.stringify(msg);
+    client.publish(rfid.write, payload);
+    logPrint('RFID WRITE -> ' + payload);
+  }
+  function clearWriteForm() {
+    document.getElementById('writeData').value = '';
+    document.getElementById('cardId').value = '';
+    updateLen();
+  }
+  function updateLen() {
+    const v = document.getElementById('writeData').value || '';
+    const len = new TextEncoder().encode(v).length;
+    document.getElementById('lenInfo').textContent = `${len}/16`;
+  }
+
+  // ==== RFID: Mesaj İşleyiciler ====
+  function handleRead(text) {
+    try {
+      const obj = JSON.parse(text);
+      const ts = toClock(obj.timestamp);
+      setText('lastCard', obj.card_id || '-');
+      setText('lastData', obj.data ?? '');
+      setText('lastTime', ts);
+      setText('lastDevice', obj.device || '-');
+      pushReadRow(ts, obj.card_id || '-', obj.data ?? '', obj.device || '-');
+      logPrint('RFID READ: ' + text);
+    } catch (e) {
+      logPrint('RFID READ parse hatası: ' + e + ' | ' + text);
+    }
+  }
+
+  function handleStatus(text) {
+    try {
+      const obj = JSON.parse(text);
+      const ts = toClock(obj.timestamp);
+      const status = (obj.status || '').toLowerCase();
+      setText('statusVal', pill(status));
+      setText('statusCard', obj.card_id || '-');
+      setText('statusData', obj.data ?? '');
+      setText('statusTime', ts);
+      pushStatusRow(ts, status, obj.card_id || '-', obj.data ?? '');
+      logPrint('RFID STATUS: ' + text);
+    } catch (e) {
+      logPrint('RFID STATUS parse hatası: ' + e + ' | ' + text);
+    }
+  }
+
+  // ==== UI yardımcıları ====
+  function toClock(ms) {
+    const now = new Date();
+    const local = now.toLocaleTimeString();
+    if (typeof ms === 'number') return `t(${ms}) / ${local}`;
+    return local;
+  }
+  function setText(id, html) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = html;
+  }
+  function pill(status) {
+    const s = (status || '').toLowerCase();
+    if (s === 'success') return `<span class="pill ok">success</span>`;
+    if (s === 'failed')  return `<span class="pill bad">failed</span>`;
+    if (s === 'timeout') return `<span class="pill warn">timeout</span>`;
+    return `<span class="pill">${status}</span>`;
+  }
+  function pushReadRow(ts, cid, data, dev) {
+    const tbody = document.querySelector('#readTable tbody');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${ts}</td><td>${cid}</td><td>${escapeHtml(data)}</td><td>${dev}</td>`;
+    tbody.prepend(tr);
+    trimTable(tbody, 100);
+  }
+  function pushStatusRow(ts, status, cid, data) {
+    const tbody = document.querySelector('#statusTable tbody');
+    const cls = status === 'success' ? 'ok' : (status === 'failed' ? 'bad' : 'warn');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${ts}</td><td><span class="pill ${cls}">${status}</span></td><td>${cid}</td><td>${escapeHtml(data)}</td>`;
+    tbody.prepend(tr);
+    trimTable(tbody, 100);
+  }
+  function trimTable(tbody, maxRows) {
+    while (tbody.rows.length > maxRows) tbody.deleteRow(-1);
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // ==== Log yardımcıları ====
+  function logPrint(msg) {
+    const area = document.getElementById('logArea');
+    const timestamp = new Date().toLocaleTimeString();
+    area.innerHTML += `[${timestamp}] ${msg}<br>`;
+    area.scrollTop = area.scrollHeight;
+  }
+  function clearLog() {
+    document.getElementById('logArea').innerHTML = '';
+  }
+
+  // Otomatik bağlan
+  window.addEventListener('load', () => { connectMQTT(); updateLen(); });
+</script>
+</body>
+</html>

@@ -12,10 +12,10 @@
 // PID Ayarları
 float Kp = 0.8, Ki = 0.0, Kd = 2.0;
 
-int rightMaxSpeed = 220;
-int leftMaxSpeed = 220;
+int rightMaxSpeed = 175;
+int leftMaxSpeed  = 175;
 int rightBaseSpeed = 75;
-int leftBaseSpeed = 75;
+int leftBaseSpeed  = 75;
 int lastPosition = 0;
 int lastPidOutput = 0;
 int lastError = 0;
@@ -33,7 +33,7 @@ int lastError = 0;
 // Sensörler
 QTRSensors qtr;
 MPU6050 mpu;
-SoftwareWire mpuWire(18, 19); // SDA, SCL
+SoftwareWire mpuWire(18, 19); // SDA, SCL (şu an kullanılmıyor)
 
 float yaw, pitch, roll;
 int yawOffset = 0;
@@ -52,6 +52,21 @@ volatile bool newMessage = false;
 char cmd_status[32] = "none";
 char lastRequestedData[8] = "ALL";
 char logMessage[64] = "empty";
+
+// MANUAL mod için sürekli hareket (latched)
+int manualRightDir = 0; // -1,0,1
+int manualLeftDir  = 0; // -1,0,1
+
+// -------------- İLERİ DEKLARASYONLAR --------------
+void handleI2CCommand(const char* cmd);
+
+// ISR dışında bekleyen I²C komutunu işleme
+inline void processPendingI2C() {
+  if (newMessage) {
+    newMessage = false;
+    handleI2CCommand(i2cBuffer);
+  }
+}
 
 // ----------------- MPU ------------------
 void calibrateMPU() {
@@ -82,15 +97,20 @@ bool angleReached(int targetAngle) {
   return abs(delta) < 5;
 }
 
+void turn_right();
+void turn_left();
+void stopMotors();
+
 void turnAngle(int angle) {
   int startAngle = getCurrentAngle();
   int targetAngle = startAngle + angle;
   normalizeAngle(targetAngle);
   int dir = angle > 0 ? 1 : -1;
 
-  while (!angleReached(targetAngle)) {
+  while (running && currentMode == MODE_MANUAL && !angleReached(targetAngle)) {
     if (dir > 0) turn_right();
-    else turn_left();
+    else         turn_left();
+    processPendingI2C();   // STOP gelirse anında çıksın
     delay(10);
   }
   stopMotors();
@@ -132,24 +152,18 @@ void setMotorSpeeds(int rightSpeed, int leftSpeed) {
   }
 }
 
-void moveForward() {
-  setMotorSpeeds(rightBaseSpeed, leftBaseSpeed);
-}
+void moveForward()  { setMotorSpeeds(rightBaseSpeed,  leftBaseSpeed); }
+void moveBackward() { setMotorSpeeds(-rightBaseSpeed, -leftBaseSpeed); }
+void turn_left()    { setMotorSpeeds(-rightBaseSpeed,  rightBaseSpeed); }
+void turn_right()   { setMotorSpeeds( rightBaseSpeed, -leftBaseSpeed ); }
 
-void moveBackward() {
-  setMotorSpeeds(-rightBaseSpeed, -leftBaseSpeed);
-}
-
-void turn_left() {
-  setMotorSpeeds(-rightBaseSpeed, rightBaseSpeed);
-}
-
-void turn_right() {
-  setMotorSpeeds(rightBaseSpeed, -leftBaseSpeed);
-}
-
+// -1/0/1 yön komutu
 void setMotorDirections(int right, int left) {
   setMotorSpeeds(right * rightBaseSpeed, left * leftBaseSpeed);
+  if(riht == -1 && left == -1)
+    digitalWrite(11,HIGH);
+  else 
+    digitalWrite(11,LOW);
 }
 
 // ----------------- QTR ------------------
@@ -158,20 +172,35 @@ void setupQTR() {
   qtr.setSensorPins((const uint8_t[]){A7, A6, A5, A4, A3, A2, A1, A0}, SensorCount);
 }
 
+// İSTEDİĞİN GİBİ: for döngülü kalibrasyon + running koşulu + STOP anında iptal
 void calibrateQTR() {
   Serial.println("[QTR] Kalibrasyon başlatıldı...");
-  int temp = rightBaseSpeed;
+  int savedR = rightBaseSpeed;
+  int savedL = leftBaseSpeed;
   rightBaseSpeed = 65;
-  leftBaseSpeed = 65;
-  for (int i = 0; i < 1000; i++) {
+  leftBaseSpeed  = 65;
+
+  for (int i = 0; i < 1000 && running && currentMode == MODE_CALIBRATION; i++) {
     if (i % 36 > 18) turn_right();
-    else turn_left();
+    else             turn_left();
+
     qtr.calibrate();
+
+    // STOP/RESTART gibi komutları anında işleyelim
+    processPendingI2C();
+    if (!running) break; // STOP geldiyse çıkar
+
+    delay(2);
   }
-  rightBaseSpeed = temp;
-  leftBaseSpeed = temp;
+
+  rightBaseSpeed = savedR;
+  leftBaseSpeed  = savedL;
   stopMotors();
-  Serial.println("[QTR] Kalibrasyon tamamlandı.");
+  if (running && currentMode == MODE_CALIBRATION) {
+    Serial.println("[QTR] Kalibrasyon tamamlandı.");
+  } else {
+    Serial.println("[QTR] Kalibrasyon erken sonlandırıldı.");
+  }
 }
 
 // ----------------- I2C ------------------
@@ -190,13 +219,14 @@ void receiveEvent(int howMany) {
   i2cBuffer[i] = '\0';
   newMessage = true;
 
-  Serial.print("[I2C RECEIVE] Master'dan veri alındı → '");
+  // UYARI: ISR içinde Serial uzun sürerse gecikme yaratabilir.
+  // İstersen buradaki logları kapatabilirsin.
+  Serial.print("[I2C RECEIVE] '");
   Serial.print(i2cBuffer);
-  Serial.print("'  (byte sayısı: ");
+  Serial.print("' (");
   Serial.print(howMany);
-  Serial.println(")");
+  Serial.println(" byte)");
 }
-
 
 const char* getModeName() {
   switch (currentMode) {
@@ -209,10 +239,10 @@ const char* getModeName() {
 
 void requestEvent() {
   StaticJsonDocument<128> doc;
-  if (strcmp(lastRequestedData, "POS") == 0) doc["pos"] = lastPosition;
-  else if (strcmp(lastRequestedData, "ERR") == 0) doc["err"] = lastError;
-  else if (strcmp(lastRequestedData, "OUT") == 0) doc["out"] = lastPidOutput;
-  else if (strcmp(lastRequestedData, "LOG") == 0) doc["log"] = logMessage;
+  if      (strcmp(lastRequestedData, "POS")  == 0) doc["pos"]  = lastPosition;
+  else if (strcmp(lastRequestedData, "ERR")  == 0) doc["err"]  = lastError;
+  else if (strcmp(lastRequestedData, "OUT")  == 0) doc["out"]  = lastPidOutput;
+  else if (strcmp(lastRequestedData, "LOG")  == 0) doc["log"]  = logMessage;
   else if (strcmp(lastRequestedData, "MODE") == 0) doc["mode"] = getModeName();
   else {
     doc["err"]  = lastError;
@@ -222,13 +252,14 @@ void requestEvent() {
     doc["log"]  = logMessage;
   }
 
-  Serial.print("[I2C REQUEST] Master veri istedi → Tip: ");
+  // UYARI: ISR içinde Serial uzun sürerse gecikme yaratabilir.
+  Serial.print("[I2C REQUEST] Tip: ");
   Serial.print(lastRequestedData);
-  Serial.print(" | Gönderilen JSON: ");
+  Serial.print(" | JSON: ");
   serializeJson(doc, Serial);
   Serial.println();
 
-  serializeJson(doc, Wire);  // Cevabı I²C üzerinden gönder
+  serializeJson(doc, Wire);
 }
 
 // ----------------- Komut İşleme ------------------
@@ -240,25 +271,45 @@ void handleI2CCommand(const char* cmd) {
       running = true;
       digitalWrite(LED_BUILTIN, HIGH);
       strcpy(logMessage , "START - Çizgi Takip Başlatıldı");
+    } else if (currentMode == MODE_CALIBRATION) {
+      running = true;                  // kalibrasyona izin ver
+      digitalWrite(LED_BUILTIN, HIGH);
+      calibrateMPU();
+      calibrateQTR();                  // for döngülü, STOP ile kesilebilir
+      // Kalibrasyon bitince mod durumuna göre devam:
+      if (currentMode == MODE_LINE) {
+        running = true;
+      } else {
+        running = false;               // MANUAL/CALIBRATION'da dur
+      }
     } else {
-      strcpy(logMessage , "START komutu çizgi modunda geçerli");
+      strcpy(logMessage , "START komutu çizgi veya kalibrasyon modunda geçerli");
       strcpy(cmd_status, "invalid in MANUAL");
     }
+
   } else if (strncmp(cmd, "STOP", 4) == 0) {
-    running = false;
+    running = false;                   // kalibrasyon döngüsü dahil her şeyi keser
     stopMotors();
     digitalWrite(LED_BUILTIN, LOW);
     strcpy(logMessage , "STOP - Motorlar durdu");
 
   } else if (strncmp(cmd, "RESTART", 7) == 0) {
-    calibrateQTR();
+    // İSTEĞİN: RESTART → Kalibrasyon başlasın
+    running = true;
     digitalWrite(LED_BUILTIN, HIGH);
+    calibrateMPU();
+    currentMode = MODE_CALIBRATION;
+    strcpy(logMessage , "RESTART - Kalibrasyon başlıyor");
+    calibrateQTR();                    // STOP gelirse kesilir
+
+    // Kalibrasyon bitti → LINE ise takip açık, değilse dur
     if (currentMode == MODE_LINE) {
       running = true;
-      strcpy(logMessage , "RESTART - Kalibrasyon sonrası çizgi takip aktif");
+      strcpy(logMessage , "RESTART - Kalibrasyon bitti, LINE aktif");
     } else {
       running = false;
-      strcpy(logMessage , "RESTART - Kalibrasyon yapıldı, MANUAL modda çizgi takip çalışmaz");
+      stopMotors();
+      strcpy(logMessage , "RESTART - Kalibrasyon bitti, beklemede");
     }
 
   } else if (strncmp(cmd, "MODE:", 5) == 0) {
@@ -270,24 +321,23 @@ void handleI2CCommand(const char* cmd) {
       currentMode = MODE_LINE;
       strcpy(logMessage , "Mod: LINE");
     } else if (strstr(cmd + 5, "CALIBRATION")) {
-      currentMode = MODE_LINE;
+      currentMode = MODE_CALIBRATION;   // DÜZELTİLDİ
       strcpy(logMessage , "Mod: CALIBRATION");
     } else {
       strcpy(cmd_status, "invalid MODE");
       strcpy(logMessage , "Bilinmeyen mod");
     }
+
   } else if (strncmp(cmd, "SPD:", 4) == 0) {
     int speed = atoi(cmd + 4);
-    rightBaseSpeed = speed;
-    leftBaseSpeed = speed;
+    rightBaseSpeed = constrain(speed, 0, 255);
+    leftBaseSpeed  = constrain(speed, 0, 255);
     sprintf(logMessage , "Speed changed to %d", speed);
 
   } else if (strncmp(cmd, "PID:", 4) == 0) {
     float kp, ki, kd;
     if (sscanf(cmd + 4, "%f,%f,%f", &kp, &ki, &kd) == 3) {
-      Kp = kp;
-      Ki = ki;
-      Kd = kd;
+      Kp = kp; Ki = ki; Kd = kd;
       sprintf(logMessage , "PID set to Kp=%.2f Ki=%.2f Kd=%.2f", Kp, Ki, Kd);
     } else {
       strcpy(cmd_status, "invalid PID");
@@ -298,8 +348,11 @@ void handleI2CCommand(const char* cmd) {
     if (currentMode == MODE_MANUAL) {
       int right, left;
       if (sscanf(cmd + 5, "%d,%d", &right, &left) == 2) {
-        setMotorDirections(right, left);
-        sprintf(logMessage , "MANUAL MOVE: R=%d, L=%d", right, left);
+        manualRightDir = constrain(right, -1, 1);
+        manualLeftDir  = constrain(left , -1, 1);
+        running = true; // SÜREKLİ: yeni komut gelene kadar devam
+        setMotorDirections(manualRightDir, manualLeftDir); // ilk anda uygula
+        sprintf(logMessage , "MANUAL MOVE: R=%d, L=%d", manualRightDir, manualLeftDir);
       } else {
         strcpy(cmd_status, "invalid MOVE");
         strcpy(logMessage , "Invalid MOVE format");
@@ -312,6 +365,7 @@ void handleI2CCommand(const char* cmd) {
   } else if (strncmp(cmd, "ANGLE:", 6) == 0) {
     if (currentMode == MODE_MANUAL) {
       int angle = atoi(cmd + 6);
+      running = true; // dönme boyunca çalışsın
       turnAngle(angle);
       sprintf(logMessage , "MANUAL TURN: %d derece", angle);
     } else {
@@ -345,20 +399,13 @@ void lineFollow() {
   lastError = error;
 
   int rightMotorSpeed = rightBaseSpeed + motorSpeed;
-  int leftMotorSpeed  = leftBaseSpeed - motorSpeed;
+  int leftMotorSpeed  = leftBaseSpeed  - motorSpeed;
   lastPidOutput = motorSpeed;
 
   rightMotorSpeed = constrain(rightMotorSpeed, 0, rightMaxSpeed);
-  leftMotorSpeed = constrain(leftMotorSpeed, 0, leftMaxSpeed);
+  leftMotorSpeed  = constrain(leftMotorSpeed , 0, leftMaxSpeed);
 
   setMotorSpeeds(rightMotorSpeed, leftMotorSpeed);
-
-  Serial.print("[Çizgi Takip] Pos: ");
-  Serial.print(lastPosition);
-  Serial.print("  Err: ");
-  Serial.print(lastError);
-  Serial.print("  Out: ");
-  Serial.println(lastPidOutput);
 }
 
 // ----------------- Setup & Loop ------------------
@@ -372,7 +419,7 @@ void setup() {
   Wire.onReceive(receiveEvent);
   Wire.onRequest(requestEvent);
 
-  mpuWire.begin();
+  mpuWire.begin();     // şu an kullanılmıyor ama zarar vermez
   mpu.initialize();
 
   setupQTR();
@@ -382,7 +429,6 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(INT_PIN, OUTPUT);
   digitalWrite(INT_PIN, HIGH);
-
 }
 
 void loop() {
@@ -392,17 +438,20 @@ void loop() {
   }
 
   if (running) {
-    if(currentMode == MODE_LINE){
+    if (currentMode == MODE_LINE) {
       lineFollow();
-    } else if(currentMode = MODE_CALIBRATION){
-        calibrateMPU();
-        calibrateQTR();
-        running = false;
-      } else {
-        stopMotors();
-      }
+    } else if (currentMode == MODE_CALIBRATION) {
+      // Kalibrasyon RESTART/START içinde çağrılıyor (for’lu, bloklayıcı).
+      // Burada ekstra iş yok.
+    } else if (currentMode == MODE_MANUAL) {
+      // MOVE latched: sürekli uygula
+      setMotorDirections(manualRightDir, manualLeftDir);
+      delay(5);
+    } else {
+      stopMotors();
     }
-  else {
+  } else {
     stopMotors();
+    delay(5);
   }
 }

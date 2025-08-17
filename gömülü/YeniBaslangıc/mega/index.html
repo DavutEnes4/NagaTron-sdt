@@ -1,128 +1,276 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Robot Kontrol Paneli</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
-    body { font-family: sans-serif; background: #f5f5f5; padding: 20px; }
-    h2 { margin-top: 30px; }
-    input, select, button { padding: 8px; margin: 5px; }
-    #logArea { background: black; color: lime; padding: 10px; height: 200px; overflow-y: auto; font-family: monospace; }
-    .section { margin-bottom: 25px; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 5px #ccc; }
+    :root{ --bg:#f5f5f5; --card:#fff; --ink:#111; --muted:#666; --shadow:#0002; --ok:#2e7d32; --bad:#c62828; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--ink); padding: 24px; }
+    h1 { margin: 0 0 16px; }
+    h2 { margin: 0 0 10px; font-size: 18px; }
+    .row { display: flex; flex-wrap: wrap; gap: 16px; }
+    .section { flex: 1 1 380px; background: var(--card); border-radius: 10px; padding: 16px; box-shadow: 0 6px 16px var(--shadow); }
+    input, select, button { padding: 8px 10px; margin: 6px 6px 6px 0; font-size: 14px; }
+    button { cursor: pointer; border: 0; border-radius: 8px; background: #1976d2; color: #fff; }
+    button.secondary { background: #616161; }
+    button.warn { background: #ef6c00; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    label { color: var(--muted); font-size: 13px; display: inline-block; margin-right: 8px; }
+    #logArea { background: #000; color: #b7ffb7; padding: 10px; height: 240px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; border-radius: 8px; }
+    .status { font-size: 14px; margin-left: 8px; }
+    .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; background: #bbb; }
+    .dot.ok { background: var(--ok); }
+    .dot.bad { background: var(--bad); }
   </style>
 </head>
 <body>
 
-  <h1>📡 Robot Kontrol Paneli</h1>
+  <h1>📡 Robot Kontrol Paneli
+    <span class="status"><span id="connDot" class="dot"></span><span id="connText">Bağlantı yok</span></span>
+  </h1>
 
-  <div class="section">
-    <h2>Mod Seçimi</h2>
-    <select id="modeSelect">
-      <option value="LINE">Çizgi Takip (LINE)</option>
-      <option value="MANUAL">Manuel (MANUAL)</option>
-    </select>
-    <button onclick="setMode()">MOD GÖNDER</button>
-  </div>
+  <div class="row">
 
-  <div class="section">
-    <h2>Temel Komutlar</h2>
-    <button onclick="sendCommand('START')">START</button>
-    <button onclick="sendCommand('STOP')">STOP</button>
-    <button onclick="sendCommand('RESTART')">RESTART</button>
-  </div>
+    <div class="section">
+      <h2>Broker</h2>
+      <label for="broker">WebSocket MQTT URL</label>
+      <input id="broker" size="34" value="ws://nagatron-sdt.local:9001" />
+      <button id="btnConnect" onclick="connectMQTT()">Bağlan</button>
+      <button class="secondary" onclick="disconnectMQTT()">Kes</button>
+    </div>
 
-  <div class="section">
-    <h2>Hız ve PID Ayarı</h2>
-    Hız: <input type="number" id="speedInput" value="50">
-    <button onclick="sendSpeed()">HIZ GÖNDER</button><br>
-    Kp: <input type="number" id="kp" value="0.4" step="0.1">
-    Ki: <input type="number" id="ki" value="0.0" step="0.01">
-    Kd: <input type="number" id="kd" value="2.0" step="0.1">
-    <button onclick="sendPID()">PID GÖNDER</button>
-  </div>
+    <div class="section">
+      <h2>Mod Seçimi</h2>
+      <select id="modeSelect">
+        <option value="LINE">Çizgi Takip (LINE)</option>
+        <option value="MANUAL">Manuel (MANUAL)</option>
+      </select>
+      <button onclick="setMode()">MOD GÖNDER</button>
+    </div>
 
-  <div class="section">
-    <h2>Manuel Komut</h2>
-    MOVE: <input id="moveInput" placeholder="örn: 1,-1">
-    <button onclick="sendMove()">MOVE</button><br>
-    ANGLE: <input id="angleInput" placeholder="örn: 90">
-    <button onclick="sendAngle()">ANGLE</button>
-  </div>
+    <div class="section">
+      <h2>Temel Komutlar</h2>
+      <button onclick="sendCommand('START')">START</button>
+      <button onclick="sendCommand('STOP')" class="warn">STOP</button>
+      <button onclick="sendCommand('RESTART')">RESTART</button>
+    </div>
 
-  <div class="section">
-    <h2>📥 Geri Bildirim (robot/log)</h2>
-    <div id="logArea">Bağlantı bekleniyor...</div>
+    <div class="section">
+      <h2>Hız ve PID Ayarı</h2>
+      <div>
+        <label>Hız:</label>
+        <input type="number" id="speedInput" value="75" min="0" max="255" />
+        <button onclick="sendSpeed()">HIZ GÖNDER</button>
+      </div>
+      <div>
+        <label>Kp:</label><input type="number" id="kp" value="0.8" step="0.1" />
+        <label>Ki:</label><input type="number" id="ki" value="0.0" step="0.01" />
+        <label>Kd:</label><input type="number" id="kd" value="2.0" step="0.1" />
+        <button onclick="sendPID()">PID GÖNDER</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Manuel Komut</h2>
+      <div>
+        <label>MOVE (R,L):</label>
+        <input id="moveInput" placeholder="örn: 1,-1" />
+        <button onclick="sendMove()">MOVE</button>
+        <button class="secondary" onclick="publishCmd('MOVE:1,1')">İleri (1,1)</button>
+        <button class="secondary" onclick="publishCmd('MOVE:-1,-1')">Geri (-1,-1)</button>
+        <button class="secondary" onclick="publishCmd('MOVE:0,0')">Dur (0,0)</button>
+      </div>
+      <div>
+        <label>ANGLE (°):</label>
+        <input id="angleInput" placeholder="örn: 90" />
+        <button onclick="sendAngle()">ANGLE</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Delay Dönme</h2>
+      <button onclick="sendCommand('TURNRIGHT')">LEFT 90°</button>
+      <button onclick="sendCommand('TURNLEFT')">RIGHT 90°</button>
+    </div>
+
+    <div class="section">
+      <h2>Teker Yönü (DIR)</h2>
+      <label>Sağ:</label>
+      <select id="dirR">
+        <option value="1">Normal (+1)</option>
+        <option value="-1">Ters (-1)</option>
+      </select>
+      <label>Sol:</label>
+      <select id="dirL">
+        <option value="1">Normal (+1)</option>
+        <option value="-1">Ters (-1)</option>
+      </select>
+      <button onclick="sendDir()">YÖN GÖNDER</button>
+    </div>
+
+    <div class="section" style="flex-basis:100%">
+      <h2>📥 Geri Bildirim (robot/log)</h2>
+      <div id="logArea">Bağlantı bekleniyor...</div>
+      <div style="margin-top:8px;">
+        <button class="secondary" onclick="clearLog()">Logu Temizle</button>
+      </div>
+    </div>
+
   </div>
 
 <script>
-  // MQTT bağlantı ayarları
-  const broker = 'ws://nagatron-sdt.local:9001'; // WebSocket üzerinden MQTT
+  // ==== Ayarlar ====
   const commandTopic = 'robot/command';
   const logTopic = 'robot/log';
+  let client = null;
+  let connected = false;
 
-  const client = mqtt.connect(broker);
-
-  client.on('connect', () => {
-    logPrint("MQTT bağlantısı başarılı!");
-    client.subscribe(logTopic);
-  });
-
-  client.on('message', (topic, payload) => {
-    if (topic === logTopic) {
-      logPrint("LOG: " + payload.toString());
-    }
-  });
-
-  function sendCommand(cmd) {
-    const msg = { cmd };
-    client.publish(commandTopic, JSON.stringify(msg));
-    logPrint("GÖNDERİLDİ: " + JSON.stringify(msg));
+  // ==== Bağlantı Yardımcıları ====
+  function setConnected(state, note='') {
+    connected = state;
+    const dot = document.getElementById('connDot');
+    const txt = document.getElementById('connText');
+    dot.className = 'dot' + (state ? ' ok' : ' bad');
+    txt.textContent = state ? ('Bağlı ' + note) : 'Bağlantı yok';
+    document.querySelectorAll('button').forEach(b=>{
+      if (b.id === 'btnConnect') return; // bağlan butonu hep aktif
+      b.disabled = !state;
+    });
   }
 
+  function connectMQTT() {
+    const url = document.getElementById('broker').value.trim();
+    if (!url) { logPrint('Broker URL boş olamaz'); return; }
+
+    if (client) { try { client.end(true); } catch(e){} }
+    logPrint('MQTT bağlanılıyor: ' + url + ' ...');
+
+    try {
+      client = mqtt.connect(url, { reconnectPeriod: 2000 });
+    } catch (e) {
+      logPrint('MQTT connect() hatası: ' + e);
+      return;
+    }
+
+    client.on('connect', () => {
+      setConnected(true);
+      logPrint('MQTT bağlantısı başarılı!');
+      client.subscribe(logTopic, (err)=>{
+        if (err) logPrint('Subscribe hata: ' + err);
+        else logPrint('Subscribed: ' + logTopic);
+      });
+    });
+
+    client.on('reconnect', () => {
+      setConnected(false, '(yeniden bağlanılıyor)');
+      logPrint('MQTT reconnect...');
+    });
+
+    client.on('offline', () => {
+      setConnected(false, '(offline)');
+      logPrint('MQTT offline');
+    });
+
+    client.on('error', (err) => {
+      setConnected(false, '(hata)');
+      logPrint('MQTT error: ' + err);
+    });
+
+    client.on('close', () => {
+      setConnected(false, '(kapandı)');
+      logPrint('MQTT connection closed');
+    });
+
+    client.on('message', (topic, payload) => {
+      if (topic === logTopic) {
+        logPrint('LOG: ' + payload.toString());
+      }
+    });
+  }
+
+  function disconnectMQTT() {
+    if (client) {
+      logPrint('MQTT bağlantısı kesiliyor...');
+      try { client.end(true); } catch(e){}
+      client = null;
+    }
+    setConnected(false);
+  }
+
+  // ==== Komut göndericiler ====
+  function publishCmd(cmd) {
+    if (!connected || !client) { logPrint('Bağlı değilken komut gönderilemez'); return; }
+    const msgObj = { cmd: cmd };
+    const payload = JSON.stringify(msgObj);
+    client.publish(commandTopic, payload);
+    logPrint('GÖNDERİLDİ: ' + payload);
+  }
+
+  function sendCommand(cmd) { publishCmd(cmd); }
+
   function setMode() {
-    const mode = document.getElementById("modeSelect").value;
-    const msg = { mode };
-    client.publish(commandTopic, JSON.stringify(msg));
-    logPrint("MOD GÖNDERİLDİ: " + mode);
+    const mode = document.getElementById('modeSelect').value;
+    publishCmd('MODE:' + mode);
   }
 
   function sendSpeed() {
-    const speed = parseInt(document.getElementById("speedInput").value);
-    const msg = { speed };
-    client.publish(commandTopic, JSON.stringify(msg));
-    logPrint("HIZ GÖNDERİLDİ: " + speed);
+    const v = parseInt(document.getElementById('speedInput').value, 10);
+    if (Number.isNaN(v)) { logPrint('Hız sayısal olmalı'); return; }
+    const spd = Math.max(0, Math.min(255, v));
+    publishCmd('SPD:' + spd);
   }
 
   function sendPID() {
-    const kp = parseFloat(document.getElementById("kp").value);
-    const ki = parseFloat(document.getElementById("ki").value);
-    const kd = parseFloat(document.getElementById("kd").value);
-    const msg = { Kp: kp, Ki: ki, Kd: kd };
-    client.publish(commandTopic, JSON.stringify(msg));
-    logPrint("PID GÖNDERİLDİ: " + JSON.stringify(msg));
+    const kp = parseFloat(document.getElementById('kp').value);
+    const ki = parseFloat(document.getElementById('ki').value);
+    const kd = parseFloat(document.getElementById('kd').value);
+    if ([kp,ki,kd].some(x=>Number.isNaN(x))) {
+      logPrint('PID değerleri sayısal olmalı');
+      return;
+    }
+    publishCmd('PID:' + kp + ',' + ki + ',' + kd);
   }
 
   function sendMove() {
-    const value = document.getElementById("moveInput").value;
-    const msg = { cmd: "MOVE:" + value };
-    client.publish(commandTopic, JSON.stringify(msg));
-    logPrint("MOVE GÖNDERİLDİ: " + value);
+    const raw = (document.getElementById('moveInput').value || '').trim();
+    if (!raw) { logPrint('MOVE boş olamaz (örn: 1,-1)'); return; }
+    const m = raw.split(',');
+    if (m.length !== 2) { logPrint('MOVE formatı hatalı. Örn: 1,-1'); return; }
+    const r = parseInt(m[0],10), l = parseInt(m[1],10);
+    if ([r,l].some(x => Number.isNaN(x) || x < -1 || x > 1)) {
+      logPrint('MOVE sadece -1,0,1 kabul eder'); return;
+    }
+    publishCmd('MOVE:' + r + ',' + l);
   }
 
   function sendAngle() {
-    const value = document.getElementById("angleInput").value;
-    const msg = { cmd: "ANGLE:" + value };
-    client.publish(commandTopic, JSON.stringify(msg));
-    logPrint("ANGLE GÖNDERİLDİ: " + value);
+    const raw = (document.getElementById('angleInput').value || '').trim();
+    const ang = parseInt(raw, 10);
+    if (Number.isNaN(ang)) { logPrint('ANGLE sayısal olmalı (örn: 90)'); return; }
+    publishCmd('ANGLE:' + ang);
   }
 
+  function sendDir() {
+    const dr = parseInt(document.getElementById('dirR').value, 10);
+    const dl = parseInt(document.getElementById('dirL').value, 10);
+    publishCmd('DIR:' + dr + ',' + dl);   // ör: DIR:1,-1
+  }
+
+  // ==== Log yardımcıları ====
   function logPrint(msg) {
-    const area = document.getElementById("logArea");
+    const area = document.getElementById('logArea');
     const timestamp = new Date().toLocaleTimeString();
     area.innerHTML += `[${timestamp}] ${msg}<br>`;
     area.scrollTop = area.scrollHeight;
   }
+  function clearLog() {
+    document.getElementById('logArea').innerHTML = '';
+  }
+
+  // Sayfa açılınca otomatik bağlan (istersen yoruma al)
+  window.addEventListener('load', () => { connectMQTT(); });
 </script>
 </body>
 </html>
