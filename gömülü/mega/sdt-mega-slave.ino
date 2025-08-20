@@ -1,14 +1,11 @@
 #include <Wire.h>
-#include <SoftwareWire.h>
 #include <QTRSensors.h>
-#include <MPU6050.h>
 #include <ArduinoJson.h>
 #include <math.h>
 
 // ================== Sabitler & Pinler ==================
 #define I2C_SLAVE_ADDRESS 0x42
-#define MPU6050_ADDRESS   0x68
-#define INT_PIN           2
+
 
 // --- QTR yapılandırma ---
 #define QTR_EMITTER_PIN  -1   // LEDON dijital pine bağlıysa pin no, Vcc'ye sabitse -1
@@ -43,14 +40,6 @@ int lastError      = 0;
 
 // ================== Nesneler ==================
 QTRSensors qtr;
-MPU6050 mpu;
-SoftwareWire mpuWire(20, 21);
-
-// ================== Global Değişkenler ==================
-const float GYRO_SENS = 131.0f;
-float yawDeg = 0.0f;
-float gyroZBias = 0.0f;
-unsigned long lastIMUus = 0;
 
 // Modlar
 enum Mode { MODE_NONE, MODE_MANUAL, MODE_LINE, MODE_CALIBRATION };
@@ -148,61 +137,6 @@ bool dequeueCmd(char* out) {
   }
   interrupts();
   return !empty;
-}
-
-// ================== IMU (SoftwareWire) ==================
-bool mpuWakeUp_SW() {
-  mpuWire.beginTransmission(MPU6050_ADDRESS);
-  mpuWire.write(0x6B);
-  mpuWire.write(0x00);
-  return (mpuWire.endTransmission() == 0);
-}
-
-bool mpuReadGyroZRaw_SW(int16_t &gzRaw) {
-  mpuWire.beginTransmission(MPU6050_ADDRESS);
-  mpuWire.write(0x47);
-  uint8_t err = mpuWire.endTransmission(false);
-  if (err != 0) {
-    mpuWire.beginTransmission(MPU6050_ADDRESS);
-    mpuWire.write(0x47);
-    err = mpuWire.endTransmission();
-    if (err != 0) return false;
-  }
-  int n = mpuWire.requestFrom(MPU6050_ADDRESS, 2);
-  if (n != 2) return false;
-  uint8_t hi = mpuWire.read();
-  uint8_t lo = mpuWire.read();
-  gzRaw = (int16_t)((hi << 8) | lo);
-  return true;
-}
-
-void imuUpdate() {
-  if (lastIMUus == 0) { lastIMUus = micros(); return; }
-  int16_t gzRaw;
-  if (!mpuReadGyroZRaw_SW(gzRaw)) return;
-
-  unsigned long now = micros();
-  float dt = (now - lastIMUus) / 1e6f;
-  lastIMUus = now;
-
-  float gz_dps = (float)gzRaw / GYRO_SENS;
-  gz_dps -= gyroZBias;
-  yawDeg += gz_dps * dt;
-
-  while (yawDeg >  180.f) yawDeg -= 360.f;
-  while (yawDeg < -180.f) yawDeg += 360.f;
-}
-
-void imuCalibrateBias(unsigned samples = 200) {
-  delay(50);
-  long sum = 0;
-  for (unsigned i=0; i<samples; ++i) {
-    int16_t gz;
-    if (mpuReadGyroZRaw_SW(gz)) sum += gz;
-    delay(2);
-  }
-  float gz_avg = (float)sum / (float)samples;
-  gyroZBias = gz_avg / GYRO_SENS;
 }
 
 // ================== Motor Fonksiyonları ==================
@@ -464,7 +398,65 @@ void handleI2CCommand(const char* cmd) {
 }
 
 // ================== Çizgi Takip ==================
+// --- Yardımcı: float map (Arduino map() long çalışır ve küsuratı atar)
+static inline float fmap(float x, float in_min, float in_max, float out_min, float out_max) {
+  if (in_max == in_min) return out_min; // 0'a bölünme emniyeti
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
 
+// ================== Çizgi Takip ==================
+void lineFollow() {
+  if (isObstacle()) { 
+    stopMotors(); 
+    buzzerOn(); 
+    return; 
+  }
+
+  // Çizgi pozisyonu (0..7000 tipik)
+  unsigned int position = READ_BLACK ? qtr.readLineBlack(sensorValues)
+                                     : qtr.readLineWhite(sensorValues);
+  
+  // Hata hesabı
+  int error = (int)position - 3500;   // merkez 3500
+
+  // PID (Ki = 0)
+  // Not: Kp, Kd globalde float olmalı (Kp/Kd isimleri tutarlı)
+  float p_term = Kp * (error * 0.5f);
+  float d_term = Kd * (error - lastError);
+
+  float steer = p_term + d_term;
+  lastError = error;
+  lastPosition = position;  // ileride istersen hız-tabanlı D için kullanılır
+
+  // Yön çevirme (sağ/sol tersliği)
+  steer *= LINE_DIR;
+
+  // --- Steer sınırla (teorik maksimuma göre)
+  // error max ~3500 varsayımıyla p_max = Kp*3500/2, d_max = Kd*3500
+  const float STEER_MAX = (Kp * 3500.0f * 0.5f) + (Kd * 3500.0f);
+  if (steer >  STEER_MAX) steer =  STEER_MAX;
+  if (steer < -STEER_MAX) steer = -STEER_MAX;
+
+  // --- Steer'i hız ofsetine ölçekle
+  // Sağ/sol taban hızlarına simetrik +/- ekleme yapacağız.
+  // Sağ motor için +speed, sol için -speed vereceğiz.
+  float speed = fmap(steer, -STEER_MAX, STEER_MAX, -((float)rightBaseSpeed), (float)rightMaxSpeed);
+
+  // Motor hızlarını hesapla ve sınırla
+  int rightMotorSpeed = (int)round(constrain((float)rightBaseSpeed + speed, 0.0f, (float)rightMaxSpeed));
+  int leftMotorSpeed  = (int)round(constrain((float)leftBaseSpeed  - speed, 0.0f, (float)leftMaxSpeed));
+
+  // İsteğe bağlı: debug
+  Serial.print("err:");   Serial.print(error);
+  Serial.print("\tsteer:"); Serial.print(steer);
+  Serial.print("\tspeed:"); Serial.println(speed);
+
+  lastPidOutput = (int)steer;
+  setMotorSpeeds(rightMotorSpeed, leftMotorSpeed);
+}
+
+
+/*
 void lineFollow() {
   //if (!qtrCalibrated) autoCalibrateQTRSimple(AUTO_CAL_MS);
 
@@ -487,7 +479,7 @@ void lineFollow() {
   lastPidOutput = steer;
   setMotorSpeeds(rightMotorSpeed,leftMotorSpeed);
 }
-
+*/
 /*
 void lineFollow() {
   unsigned int position = qtr.readLineBlack(sensorValues);
@@ -528,12 +520,6 @@ void setup() {
   Wire.onReceive(receiveEvent);
   Wire.onRequest(requestEvent);
 
-  mpuWire.begin();
-  mpuWakeUp_SW();
-  delay(50);
-  imuCalibrateBias(200);
-  lastIMUus = micros();
-
   setupQTR();
   setupMotors();
   enableMotors();
@@ -554,8 +540,6 @@ void loop() {
   while (dequeueCmd(cmdBuf)) {
     handleI2CCommand(cmdBuf);
   }
-
-  imuUpdate();
 
   if (isObstacle()) { stopMotors(); buzzerOn(); delay(5); return; }
 
