@@ -5,6 +5,7 @@
 
 // ================== Sabitler & Pinler ==================
 #define I2C_SLAVE_ADDRESS 0x42
+#define INT_PIN           2
 
 
 // --- QTR yapılandırma ---
